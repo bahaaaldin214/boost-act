@@ -54,6 +54,7 @@ class Pipe:
         token,
         daysago,
         system="vosslnx",
+        output_dir=None,
         rebuild_manifest_only=False,
         reconcile_manifest_only=False,
     ):
@@ -62,6 +63,7 @@ class Pipe:
         self.token = token
         self.daysago = daysago
         self.system = system
+        self.output_dir = output_dir
         self.rebuild_manifest_only = rebuild_manifest_only
         self.reconcile_manifest_only = reconcile_manifest_only
 
@@ -102,6 +104,7 @@ class Pipe:
                     intdir=type(self).INT_DIR,
                     obsdir=type(self).OBS_DIR,
                     system=self.system,
+                    output_dir=self.output_dir,
                 ).run_gg()
         finally:
             Save.remove_symlink_directories([type(self).INT_DIR, type(self).OBS_DIR])

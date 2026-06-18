@@ -8,85 +8,143 @@ main <- function() {
   # Define the option list
   option_list <- list(
     make_option(c("-p", "--project_dir"), type = "character",
-                default = "/mnt/nfs/lss/vosslabhpc/Projects/BOOST/InterventionStudy/3-Experiment/data/act-int-test/",
-                help = "Path to the project directory", metavar = "character"),
+                default = NULL,
+                help = "Legacy: Path to the project directory containing sub-* folders", metavar = "character"),
+    make_option(c("-i", "--input_dir"), type = "character",
+                default = NULL,
+                help = "Path to the input directory containing sub-* folders", metavar = "character"),
+    make_option(c("-o", "--output_dir"), type = "character",
+                default = NULL,
+                help = "Path to the output directory where derivatives will be saved", metavar = "character"),
     make_option(c("-d", "--deriv_dir"), type = "character",
-                default = "/derivatives/GGIR-3.2.6/",
-                help = "Path to the derivatives directory", metavar = "character")
+                default = "derivatives/GGIR-3.2.6/",
+                help = "Path to the derivatives directory relative to output_dir", metavar = "character")
   )
 
   # Parse the options
   opt_parser <- OptionParser(option_list = option_list)
   opt <- parse_args(opt_parser)
 
-  # Assign variables
-  ProjectDir <- opt$project_dir
+  # Resolve Paths
+  # Priority: --input_dir > --project_dir > default
+  InputDir <- opt$input_dir
+  if (is.null(InputDir)) {
+    InputDir <- opt$project_dir
+  }
+  if (is.null(InputDir)) {
+    InputDir <- "/mnt/nfs/lss/vosslabhpc/Projects/BOOST/InterventionStudy/3-Experiment/data/act-int-test/"
+  }
+
+  # Priority: --output_dir > InputDir
+  OutputDir <- opt$output_dir
+  if (is.null(OutputDir)) {
+    OutputDir <- InputDir
+  }
+
   ProjectDerivDir <- opt$deriv_dir
-  last_folder <- basename(ProjectDir)
+  last_folder <- basename(InputDir)
   
   # Determine correct filename
   if (grepl("act-obs", last_folder, fixed = TRUE)) {
-    SleepLog <- normalizePath(file.path(ProjectDir, "sleep_log_observational.csv"), mustWork = FALSE)
+    SleepLog <- normalizePath(file.path(InputDir, "sleep_log_observational.csv"), mustWork = FALSE)
   } else if (grepl("act-int", last_folder, fixed = TRUE)) {
-    SleepLog <- normalizePath(file.path(ProjectDir, "sleep_log_intervention.csv"), mustWork = FALSE)
+    SleepLog <- normalizePath(file.path(InputDir, "sleep_log_intervention.csv"), mustWork = FALSE)
+  } else if (grepl("input", last_folder, fixed = TRUE)) {
+    # Default to intervention if generic 'input' name
+    SleepLog <- normalizePath(file.path(InputDir, "sleep_log_intervention.csv"), mustWork = FALSE)
   } else {
-    stop("Unrecognized project directory. Exiting.")
+    # Fallback to current dir if unrecognized
+    SleepLog <- normalizePath(file.path(InputDir, "sleep_log_intervention.csv"), mustWork = FALSE)
   }
 
-  print(paste("Project Directory:", ProjectDir))
+  print(paste("Input Directory:", InputDir))
+  print(paste("Output Directory:", OutputDir))
   print(paste("Derivatives Directory:", ProjectDerivDir))
   print(paste("Sleep Log Location:", SleepLog))
 
   # Helper functions
   SubjectGGIRDeriv <- function(x) {
+    # x is a path relative to InputDir
     a <- dirname(x)
-    paste0(ProjectDir, ProjectDerivDir, a)
+    # Output path construction
+    file.path(OutputDir, ProjectDerivDir, a)
   }
 
   datadirname <- function(x) {
+    # x is a path relative to InputDir
     b <- dirname(x)
-    paste0(ProjectDir, b)
+    file.path(InputDir, b)
   }
 
   # Gather subject directories
-  directories <- list.dirs(ProjectDir, recursive = FALSE)
+  directories <- list.dirs(InputDir, recursive = FALSE)
   subdirs <- directories[grepl("sub-*", directories)]
-  print(paste("subdirs: ", subdirs))
+  print(paste("subdirs found: ", length(subdirs)))
 
   # Create project-specific derivatives GGIR folder if it doesn't exist
-  if (!dir.exists(paste0(ProjectDir, ProjectDerivDir))) {
-    dir.create(paste0(ProjectDir, ProjectDerivDir))
+  FinalDerivPath <- file.path(OutputDir, ProjectDerivDir)
+  if (!dir.exists(FinalDerivPath)) {
+    dir.create(FinalDerivPath, recursive = TRUE)
   }
 
-  # List accel.csv files
-  filepattern <- "*accel.csv"
-  GGIRfiles <- list.files(subdirs, pattern = filepattern, recursive = TRUE,
-                          include.dirs = TRUE, full.names = TRUE, no.. = TRUE)
-  print(paste("GGIR Files before splitting: ", GGIRfiles))
+  # List accel files: prefer gt3x when both formats exist for one session.
+  all_candidates <- list.files(
+    subdirs,
+    pattern = "\\.(gt3x|csv)$",
+    recursive = TRUE,
+    include.dirs = FALSE,
+    full.names = TRUE,
+    no.. = TRUE
+  )
 
-  # Adjust path formatting
-  GGIRfiles <- sapply(strsplit(GGIRfiles, "//", fixed = TRUE), function(x) paste(x[2]))
-  print(paste("GGIR Files after splitting: ", GGIRfiles))
+  print(paste("Files found: ", length(all_candidates)))
 
-  # Ensure directory structure exists
-  for (i in GGIRfiles) {
-    if (!dir.exists(SubjectGGIRDeriv(i))) {
-      dir.create(SubjectGGIRDeriv(i), recursive = TRUE)
+  # Normalize paths relative to InputDir for processing.
+  InputDirAbs <- normalizePath(InputDir)
+  GGIRfilesAbs <- sapply(all_candidates, normalizePath, mustWork = FALSE)
+  
+  # Strip the InputDir part to get relative paths.
+  RelativeFiles <- gsub(paste0(InputDirAbs, "/"), "", GGIRfilesAbs, fixed = TRUE)
+
+  # Keep one file per session directory. gt3x wins over csv.
+  candidate_groups <- split(RelativeFiles, dirname(RelativeFiles))
+  GGIRfiles <- unlist(lapply(candidate_groups, function(paths) {
+    gt3x <- paths[grepl("\\.gt3x$", paths, ignore.case = TRUE)]
+    if (length(gt3x) > 0) {
+      return(gt3x[1])
+    }
+
+    csv <- paths[grepl("_accel\\.csv$", paths, ignore.case = TRUE)]
+    if (length(csv) > 0) {
+      return(csv[1])
+    }
+
+    character(0)
+  }), use.names = FALSE)
+  
+  # Ensure directory structure exists in Output
+  for (i in RelativeFiles) {
+    target_deriv <- SubjectGGIRDeriv(i)
+    if (!dir.exists(target_deriv)) {
+      dir.create(target_deriv, recursive = TRUE)
     }
   }
 
   # Run GGIR loop
-  for (r in GGIRfiles) {
-    datadir <- normalizePath(datadirname(r), mustWork = FALSE)
+  # Note: If a session has both .gt3x and .csv, GGIR will process both if they are in different subdirs.
+  # Since our BIDS layout puts them in the same subdir, we should be careful.
+  for (r in RelativeFiles) {
+    datadir <- datadirname(r)
     outputdir <- SubjectGGIRDeriv(r)
+    
+    print(paste("Processing: ", r))
     print(paste("datadir: ", datadir))
     print(paste("outputdir: ", outputdir))
+    
     if (!dir.exists(datadir)) {
-      stop(paste("Error: datadir does not exist ->", datadir))
+      print(paste("Error: datadir does not exist ->", datadir))
+      next
     }
-
-    assign("datadir", datadir, envir = .GlobalEnv)
-    assign("outputdir", outputdir, envir = .GlobalEnv)
 
     try({
       GGIR(

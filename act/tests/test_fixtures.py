@@ -1,4 +1,5 @@
 from pathlib import Path
+import tempfile
 
 
 def _matched_lab_ids(
@@ -10,10 +11,11 @@ def _matched_lab_ids(
 
 
 def test_temp_study_roots_are_local(temp_study_roots):
+    temp_root = Path(tempfile.gettempdir())
     for root in temp_study_roots.values():
         assert root.exists()
         assert root.is_dir()
-        assert str(root).startswith("/tmp/")
+        assert temp_root in root.parents or root == temp_root
 
 
 def test_accel_filename_factory(accel_filename_factory):

@@ -250,6 +250,7 @@ def test_main_smoke_invokes_pipe_and_group(monkeypatch):
             token,
             daysago,
             system,
+            output_dir=None,
             rebuild_manifest_only=False,
             reconcile_manifest_only=False,
         ):
@@ -257,6 +258,7 @@ def test_main_smoke_invokes_pipe_and_group(monkeypatch):
                 "token": token,
                 "daysago": daysago,
                 "system": system,
+                "output_dir": output_dir,
                 "rebuild_manifest_only": rebuild_manifest_only,
                 "reconcile_manifest_only": reconcile_manifest_only,
             }
@@ -310,6 +312,7 @@ def test_main_smoke_invokes_pipe_and_group(monkeypatch):
         "token": "token-value",
         "daysago": 2,
         "system": "local",
+        "output_dir": None,
         "rebuild_manifest_only": False,
         "reconcile_manifest_only": False,
     }
@@ -326,6 +329,7 @@ def test_main_manifest_only_skips_plotting(monkeypatch):
             token,
             daysago,
             system,
+            output_dir=None,
             rebuild_manifest_only=False,
             reconcile_manifest_only=False,
         ):
@@ -333,6 +337,7 @@ def test_main_manifest_only_skips_plotting(monkeypatch):
                 "token": token,
                 "daysago": daysago,
                 "system": system,
+                "output_dir": output_dir,
                 "rebuild_manifest_only": rebuild_manifest_only,
                 "reconcile_manifest_only": reconcile_manifest_only,
             }
@@ -386,6 +391,7 @@ def test_main_manifest_only_skips_plotting(monkeypatch):
         "token": "token-value",
         "daysago": 2,
         "system": "local",
+        "output_dir": None,
         "rebuild_manifest_only": True,
         "reconcile_manifest_only": False,
     }
@@ -402,6 +408,7 @@ def test_main_reconcile_only_returns_zero_and_skips_plotting(monkeypatch):
             token,
             daysago,
             system,
+            output_dir=None,
             rebuild_manifest_only=False,
             reconcile_manifest_only=False,
         ):
@@ -409,6 +416,7 @@ def test_main_reconcile_only_returns_zero_and_skips_plotting(monkeypatch):
                 "token": token,
                 "daysago": daysago,
                 "system": system,
+                "output_dir": output_dir,
                 "rebuild_manifest_only": rebuild_manifest_only,
                 "reconcile_manifest_only": reconcile_manifest_only,
             }
@@ -465,6 +473,7 @@ def test_main_reconcile_only_returns_zero_and_skips_plotting(monkeypatch):
         "token": "token-value",
         "daysago": 2,
         "system": "local",
+        "output_dir": None,
         "rebuild_manifest_only": False,
         "reconcile_manifest_only": True,
     }
@@ -479,6 +488,7 @@ def test_main_reconcile_only_returns_nonzero_on_failures(monkeypatch):
             token,
             daysago,
             system,
+            output_dir=None,
             rebuild_manifest_only=False,
             reconcile_manifest_only=False,
         ):
@@ -540,6 +550,7 @@ def test_main_manifest_only_returns_nonzero_on_rebuild_error(monkeypatch):
             token,
             daysago,
             system,
+            output_dir=None,
             rebuild_manifest_only=False,
             reconcile_manifest_only=False,
         ):

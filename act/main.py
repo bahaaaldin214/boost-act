@@ -85,6 +85,12 @@ def build_parser() -> argparse.ArgumentParser:
         required=True,
         help="Target system path profile",
     )
+    parser.add_argument(
+        "--output-dir",
+        dest="output_dir",
+        default=None,
+        help="Optional GGIR output directory override",
+    )
     manifest_mode_group = parser.add_mutually_exclusive_group()
     manifest_mode_group.add_argument(
         "--rebuild-manifest-only",
@@ -110,6 +116,7 @@ def main(argv: list[str] | None = None) -> int:
         token=args.token,
         daysago=args.daysago,
         system=args.system,
+        output_dir=args.output_dir,
         rebuild_manifest_only=args.rebuild_manifest_only,
         reconcile_manifest_only=args.reconcile_manifest_only,
     )
