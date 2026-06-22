@@ -9,21 +9,38 @@ class GG:
     Class to execute GGIR processing for matched subject records.
     """
 
-    def __init__(self, matched, intdir, obsdir, system, output_dir=None):
+    def __init__(
+        self,
+        matched,
+        intdir,
+        obsdir,
+        system,
+        int_out_dir=None,
+        obs_out_dir=None,
+        output_dir=None,
+    ):
         """
         Initialize the GG instance.
 
         Args:
             matched (dict): Mapping of subject IDs to their records.
-            intdir (str): Path to the internal directory (Input).
-            obsdir (str): Path to the observational directory (Input).
+            intdir (str): Path to the intervention input directory.
+            obsdir (str): Path to the observational input directory.
             system (str): Active system profile.
-            output_dir (str, optional): Path to the output directory. Defaults to None (uses project_dir).
+            int_out_dir (str, optional): Output root for intervention derivatives.
+                Defaults to intdir (legacy: derivatives under input).
+            obs_out_dir (str, optional): Output root for observational derivatives.
+                Defaults to obsdir.
+            output_dir (str, optional): Legacy single override for both projects.
         """
         self.matched = matched
         self.INTDIR = intdir.rstrip("/") + "/"
         self.OBSDIR = obsdir.rstrip("/") + "/"
-        self.OUTPUT_DIR = output_dir.rstrip("/") + "/" if output_dir else None
+        # Resolve per-project output roots; explicit output_dir overrides both.
+        int_out = output_dir or int_out_dir or intdir
+        obs_out = output_dir or obs_out_dir or obsdir
+        self.INT_OUT_DIR = int_out.rstrip("/") + "/"
+        self.OBS_OUT_DIR = obs_out.rstrip("/") + "/"
         self.DERIVATIVES = "derivatives/GGIR-3.2.6/"  # Defined within the class
         self.system = system
 
@@ -38,11 +55,16 @@ class GG:
         # Tabular logging data
         report = []
 
+        project_outputs = {
+            self.INTDIR: self.INT_OUT_DIR,
+            self.OBSDIR: self.OBS_OUT_DIR,
+        }
+
         for project_dir in [self.INTDIR, self.OBSDIR]:
+            output_dir = project_outputs[project_dir]
             # Construct command with new I/O flags
             command = f"Rscript act/core/acc_new.R --input_dir {project_dir}"
-            if self.OUTPUT_DIR:
-                command += f" --output_dir {self.OUTPUT_DIR}"
+            command += f" --output_dir {output_dir}"
             command += f" --deriv_dir {self.DERIVATIVES}"
 
             project_type = "int" if project_dir.rstrip("/") == self.INTDIR.rstrip("/") else "obs"

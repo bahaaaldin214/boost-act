@@ -100,11 +100,15 @@ main <- function() {
   print(paste("Files found: ", length(all_candidates)))
 
   # Normalize paths relative to InputDir for processing.
-  InputDirAbs <- normalizePath(InputDir)
-  GGIRfilesAbs <- sapply(all_candidates, normalizePath, mustWork = FALSE)
-  
+  InputDirAbs <- normalizePath(InputDir, winslash = "/", mustWork = FALSE)
+  GGIRfilesAbs <- normalizePath(all_candidates, winslash = "/", mustWork = FALSE)
+
   # Strip the InputDir part to get relative paths.
-  RelativeFiles <- gsub(paste0(InputDirAbs, "/"), "", GGIRfilesAbs, fixed = TRUE)
+  RelativeFiles <- ifelse(
+    startsWith(GGIRfilesAbs, paste0(InputDirAbs, "/")),
+    substring(GGIRfilesAbs, nchar(InputDirAbs) + 2),
+    GGIRfilesAbs
+  )
 
   # Keep one file per session directory. gt3x wins over csv.
   candidate_groups <- split(RelativeFiles, dirname(RelativeFiles))
@@ -161,7 +165,6 @@ main <- function() {
         # ==== Part 1: Data loading and basic signal processing ====
         do.report = c(2, 4, 5, 6),
         epochvalues2csv = TRUE,
-        do.ENMO = TRUE,
         acc.metric = "ENMO",
         windowsizes = c(5, 900, 3600),
 

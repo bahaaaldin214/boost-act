@@ -24,8 +24,16 @@ LOG_FILE="logs/${SYSTEM}/$(date +%Y%m%d_%H%M%S).log"
 export LOG_FILE
 python -m act.main --daysago "${DAYS_AGO}" --token "${BOOST_TOKEN}" --system "${SYSTEM}" >> "${LOG_FILE}" 2>&1
 
+# Push automated result commits to a writable fork remote, since origin
+# (HBCLab/boost-act) is read-only for the service account. Configure the fork
+# remote name via RESULTS_REMOTE (default: personal).
+RESULTS_REMOTE="${RESULTS_REMOTE:-personal}"
 if ! git diff --quiet; then
   git add .
   git commit -m "automated commit by vosslab linux"
-  git push
+  if git remote get-url "${RESULTS_REMOTE}" >/dev/null 2>&1; then
+    git push "${RESULTS_REMOTE}" HEAD
+  else
+    echo "Results remote '${RESULTS_REMOTE}' not configured; skipping push." >&2
+  fi
 fi

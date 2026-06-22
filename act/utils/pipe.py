@@ -7,6 +7,11 @@ class Pipe:
     INT_DIR: str = ""
     OBS_DIR: str = ""
     RDSS_DIR: str = ""
+    # Output roots where GGIR derivatives are written/read. When a profile omits
+    # them they default to the matching input dir (legacy behaviour: derivatives
+    # live under the input folder). GGIR writes <OUT_DIR>/derivatives/GGIR-3.2.6/.
+    INT_OUT_DIR: str = ""
+    OBS_OUT_DIR: str = ""
 
     _SYSTEM_PATHS = {
         "vosslnx": dict(
@@ -15,7 +20,10 @@ class Pipe:
             RDSS_DIR="/mnt/nfs/rdss/vosslab/Repositories/Accelerometer_Data",
         ),
         "vosslnxft": dict(
-            INT_DIR="/mnt/nfs/lss/vosslabhpc/Projects/BOOST/InterventionStudy/3-experiment/data/act-int-final-test-2",
+            # Intervention input is now the canonical Globus/manual landing zone;
+            # derivatives are written to a separate sibling output/ folder.
+            INT_DIR="/mnt/nfs/lss/vosslabhpc/Projects/BOOST/InterventionStudy/3-experiment/inputs/act-int-ready",
+            INT_OUT_DIR="/mnt/nfs/lss/vosslabhpc/Projects/BOOST/InterventionStudy/3-experiment/output",
             OBS_DIR="/mnt/nfs/lss/vosslabhpc/Projects/BOOST/ObservationalStudy/3-experiment/data/act-obs-final-test-2",
             RDSS_DIR="/mnt/nfs/rdss/vosslab/Repositories/Accelerometer_Data",
         ),
@@ -48,6 +56,9 @@ class Pipe:
         cls.INT_DIR = paths["INT_DIR"]
         cls.OBS_DIR = paths["OBS_DIR"]
         cls.RDSS_DIR = paths["RDSS_DIR"]
+        # Output dirs default to the matching input dir when not specified.
+        cls.INT_OUT_DIR = paths.get("INT_OUT_DIR") or paths["INT_DIR"]
+        cls.OBS_OUT_DIR = paths.get("OBS_OUT_DIR") or paths["OBS_DIR"]
 
     def __init__(
         self,
@@ -99,12 +110,17 @@ class Pipe:
                 json.dump(matched, f, indent=2)
 
             if not self.rebuild_manifest_only:
+                # Per-project output roots: an explicit --output-dir overrides both;
+                # otherwise each project uses its profile output dir.
+                int_out = self.output_dir or type(self).INT_OUT_DIR
+                obs_out = self.output_dir or type(self).OBS_OUT_DIR
                 GG(
                     matched=matched,
                     intdir=type(self).INT_DIR,
                     obsdir=type(self).OBS_DIR,
                     system=self.system,
-                    output_dir=self.output_dir,
+                    int_out_dir=int_out,
+                    obs_out_dir=obs_out,
                 ).run_gg()
         finally:
             Save.remove_symlink_directories([type(self).INT_DIR, type(self).OBS_DIR])

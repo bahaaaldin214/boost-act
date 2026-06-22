@@ -12,8 +12,9 @@ class Group:
     def __init__(self, system: str = "vosslnx"):
         Pipe.configure(system)
         self.system = system
-        self.obs_path = Pipe.OBS_DIR
-        self.int_path = Pipe.INT_DIR
+        # Derivatives are read from the per-project output roots.
+        self.obs_path = Pipe.OBS_OUT_DIR
+        self.int_path = Pipe.INT_OUT_DIR
         self.paths = [
             os.path.join(self.obs_path, "derivatives", "GGIR-3.2.6"),
             os.path.join(self.int_path, "derivatives", "GGIR-3.2.6"),
