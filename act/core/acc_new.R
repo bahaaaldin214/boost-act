@@ -158,9 +158,9 @@ main <- function() {
         datadir = datadir,
         outputdir = outputdir,
         studyname = "boost",
-        # GGIR_OVERWRITE=TRUE forces a full reprocess (use after changing params);
-        # default FALSE resumes from GGIR's milestone cache (meta/ms*.out) -> fast reruns.
-        overwrite = isTRUE(as.logical(Sys.getenv("GGIR_OVERWRITE", "FALSE"))),
+        # Default TRUE = full reprocess. Set GGIR_OVERWRITE=FALSE to resume from
+        # GGIR's milestone cache (meta/ms*.out) for fast reruns of unchanged files.
+        overwrite = isTRUE(as.logical(Sys.getenv("GGIR_OVERWRITE", "TRUE"))),
         desiredtz = "America/Chicago",
         print.filename = TRUE,
         idloc = 6,
