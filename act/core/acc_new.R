@@ -134,20 +134,21 @@ main <- function() {
     }
   }
 
-  # Run GGIR loop
+  # Run GGIR per session file. Each call processes one file, so GGIR's own
+  # do.parallel does nothing here; instead we parallelize across files below.
   # Note: If a session has both .gt3x and .csv, GGIR will process both if they are in different subdirs.
   # Since our BIDS layout puts them in the same subdir, we should be careful.
-  for (r in RelativeFiles) {
+  process_one <- function(r) {
     datadir <- datadirname(r)
     outputdir <- SubjectGGIRDeriv(r)
-    
+
     print(paste("Processing: ", r))
     print(paste("datadir: ", datadir))
     print(paste("outputdir: ", outputdir))
-    
+
     if (!dir.exists(datadir)) {
       print(paste("Error: datadir does not exist ->", datadir))
-      next
+      return(invisible(NULL))
     }
 
     try({
@@ -196,6 +197,13 @@ main <- function() {
       )
     })
   }
+
+  # Parallelize across session files. mc.cores via GGIR_NCORES (default 3);
+  # set GGIR_NCORES=1 for serial. mclapply forks (Linux); each fork runs one
+  # single-file GGIR, and outputs go to per-subject dirs so writes never collide.
+  ncores <- as.integer(Sys.getenv("GGIR_NCORES", "3"))
+  if (is.na(ncores) || ncores < 1) ncores <- 1L
+  parallel::mclapply(RelativeFiles, process_one, mc.cores = ncores)
 }
 
 # Run main if executed as script
