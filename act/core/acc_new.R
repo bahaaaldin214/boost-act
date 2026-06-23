@@ -110,17 +110,20 @@ main <- function() {
     GGIRfilesAbs
   )
 
-  # Keep one file per session directory. gt3x wins over csv.
+  # Keep one file per session directory. Default: gt3x wins over csv.
+  # Set GGIR_PREFER_RAW=TRUE to force the raw _accel.csv to win over gt3x.
+  prefer_raw <- isTRUE(as.logical(Sys.getenv("GGIR_PREFER_RAW", "FALSE")))
   candidate_groups <- split(RelativeFiles, dirname(RelativeFiles))
   GGIRfiles <- unlist(lapply(candidate_groups, function(paths) {
     gt3x <- paths[grepl("\\.gt3x$", paths, ignore.case = TRUE)]
-    if (length(gt3x) > 0) {
-      return(gt3x[1])
-    }
-
     csv <- paths[grepl("_accel\\.csv$", paths, ignore.case = TRUE)]
-    if (length(csv) > 0) {
-      return(csv[1])
+
+    if (prefer_raw) {
+      if (length(csv) > 0) return(csv[1])
+      if (length(gt3x) > 0) return(gt3x[1])
+    } else {
+      if (length(gt3x) > 0) return(gt3x[1])
+      if (length(csv) > 0) return(csv[1])
     }
 
     character(0)
