@@ -129,28 +129,32 @@ main <- function() {
     character(0)
   }), use.names = FALSE)
   
-  # Ensure directory structure exists in Output
-  for (i in RelativeFiles) {
+  # Ensure directory structure exists in Output (one entry per session).
+  for (i in GGIRfiles) {
     target_deriv <- SubjectGGIRDeriv(i)
     if (!dir.exists(target_deriv)) {
       dir.create(target_deriv, recursive = TRUE)
     }
   }
 
-  # Run GGIR per session file. Each call processes one file, so GGIR's own
-  # do.parallel does nothing here; instead we parallelize across files below.
-  # Note: If a session has both .gt3x and .csv, GGIR will process both if they are in different subdirs.
-  # Since our BIDS layout puts them in the same subdir, we should be careful.
+  # Run GGIR once per session on the SINGLE selected file (GGIRfiles, deduped).
+  # We pass the file itself as datadir (not its parent folder): a BIDS session
+  # dir can hold BOTH a .gt3x and an _accel.csv for the same recording, and
+  # GGIR processes every accel file in a folder -> that produced duplicate day
+  # rows with mismatched numbers (gt3x vs RAW) and 0-sleep rows from gt3x idle
+  # sleep mode. studyname = session name keeps the output folder "output_<ses>"
+  # so downstream qc/group/plots paths still resolve.
   process_one <- function(r) {
-    datadir <- datadirname(r)
+    datafile <- file.path(InputDir, r)
+    studyname <- basename(dirname(r))
     outputdir <- SubjectGGIRDeriv(r)
 
     print(paste("Processing: ", r))
-    print(paste("datadir: ", datadir))
+    print(paste("datafile: ", datafile))
     print(paste("outputdir: ", outputdir))
 
-    if (!dir.exists(datadir)) {
-      print(paste("Error: datadir does not exist ->", datadir))
+    if (!file.exists(datafile)) {
+      print(paste("Error: datafile does not exist ->", datafile))
       return(invisible(NULL))
     }
 
@@ -158,9 +162,9 @@ main <- function() {
       GGIR(
         # ==== Initialization ====
         mode = 1:6,
-        datadir = datadir,
+        datadir = datafile,
         outputdir = outputdir,
-        studyname = "boost",
+        studyname = studyname,
         # Default TRUE = full reprocess. Set GGIR_OVERWRITE=FALSE to resume from
         # GGIR's milestone cache (meta/ms*.out) for fast reruns of unchanged files.
         overwrite = isTRUE(as.logical(Sys.getenv("GGIR_OVERWRITE", "TRUE"))),
@@ -203,12 +207,12 @@ main <- function() {
     })
   }
 
-  # Parallelize across session files. mc.cores via GGIR_NCORES (default 3);
-  # set GGIR_NCORES=1 for serial. mclapply forks (Linux); each fork runs one
-  # single-file GGIR, and outputs go to per-subject dirs so writes never collide.
+  # Parallelize across sessions (GGIRfiles = one file per session). mc.cores via
+  # GGIR_NCORES (default 3); set GGIR_NCORES=1 for serial. mclapply forks (Linux);
+  # each fork runs one session into its own output dir so writes never collide.
   ncores <- as.integer(Sys.getenv("GGIR_NCORES", "3"))
   if (is.na(ncores) || ncores < 1) ncores <- 1L
-  parallel::mclapply(RelativeFiles, process_one, mc.cores = ncores)
+  parallel::mclapply(GGIRfiles, process_one, mc.cores = ncores)
 }
 
 # Run main if executed as script
