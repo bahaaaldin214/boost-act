@@ -37,6 +37,13 @@ class Pipe:
             OBS_DIR="/Shared/vosslabhpc/Projects/BOOST/ObservationalStudy/3-experiment/data/act-obs-test",
             RDSS_DIR=None,
         ),
+        "extend": dict(
+            INT_DIR="/mnt/nfs/lss/vosslabhpc/Projects/BikeExtend/3-Experiment/2-Data/BIDS",
+            OBS_DIR="",
+            INT_OUT_DIR="/mnt/nfs/lss/vosslabhpc/Projects/BikeExtend/3-Experiment/2-Data/BIDS",
+            OBS_OUT_DIR="",
+            RDSS_DIR="/mnt/nfs/rdss/vosslab/Repositories/Accelerometer_Data",
+        ),
     }
 
     @classmethod
@@ -68,6 +75,7 @@ class Pipe:
         output_dir=None,
         rebuild_manifest_only=False,
         reconcile_manifest_only=False,
+        ggir_only=False,
     ):
         # ensure class attrs are set for everyone (Pipe.INT_DIR etc.)
         type(self).configure(system)
@@ -77,8 +85,22 @@ class Pipe:
         self.output_dir = output_dir
         self.rebuild_manifest_only = rebuild_manifest_only
         self.reconcile_manifest_only = reconcile_manifest_only
+        self.ggir_only = ggir_only
 
     def run_pipe(self):
+        if self.ggir_only:
+            int_out = self.output_dir or type(self).INT_OUT_DIR
+            obs_out = self.output_dir or type(self).OBS_OUT_DIR
+            GG(
+                matched={},
+                intdir=type(self).INT_DIR,
+                obsdir=type(self).OBS_DIR,
+                system=self.system,
+                int_out_dir=int_out,
+                obs_out_dir=obs_out,
+            ).run_gg()
+            return None
+
         save_instance = Save(
             intdir=type(self).INT_DIR,
             obsdir=type(self).OBS_DIR,

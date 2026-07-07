@@ -3,7 +3,7 @@ import logging
 import os
 
 
-DEFAULT_SYSTEMS = ("vosslnx", "vosslnxft", "argon", "local")
+DEFAULT_SYSTEMS = ("vosslnx", "vosslnxft", "argon", "local", "extend")
 
 
 def _configure_logging() -> None:
@@ -70,8 +70,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--token",
         type=_token_type,
-        required=True,
-        help="RedCap API token (required, non-empty)",
+        default="",
+        help="RedCap API token (required for ingest modes; optional with --ggir-only)",
     )
     parser.add_argument(
         "--daysago",
@@ -102,6 +102,11 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Reconcile manifest-only mode (verifies or repairs canonical CSVs and skips GGIR/plotting)",
     )
+    parser.add_argument(
+        "--ggir-only",
+        action="store_true",
+        help="Run GGIR only (skip REDCap ingest, manifest, and group plots)",
+    )
     return parser
 
 
@@ -112,6 +117,10 @@ def main(argv: list[str] | None = None) -> int:
     _configure_logging()
     args = build_parser().parse_args(argv)
 
+    if not args.ggir_only and not args.token.strip():
+        logging.error("--token is required unless --ggir-only is set")
+        return 2
+
     p = Pipe(
         token=args.token,
         daysago=args.daysago,
@@ -119,6 +128,7 @@ def main(argv: list[str] | None = None) -> int:
         output_dir=args.output_dir,
         rebuild_manifest_only=args.rebuild_manifest_only,
         reconcile_manifest_only=args.reconcile_manifest_only,
+        ggir_only=args.ggir_only,
     )
 
     try:
@@ -140,7 +150,7 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 0 if not report.get("errors") else 1
 
-    if not args.rebuild_manifest_only:
+    if not args.rebuild_manifest_only and not args.ggir_only:
         Group(args.system).plot_person()
         Group(args.system).plot_session()
     return 0

@@ -1,3 +1,4 @@
+import os
 import subprocess
 import logging
 
@@ -34,46 +35,77 @@ class GG:
             output_dir (str, optional): Legacy single override for both projects.
         """
         self.matched = matched
-        self.INTDIR = intdir.rstrip("/") + "/"
-        self.OBSDIR = obsdir.rstrip("/") + "/"
+        self.INTDIR = intdir.rstrip("/") + "/" if intdir else ""
+        self.OBSDIR = obsdir.rstrip("/") + "/" if obsdir else ""
         # Resolve per-project output roots; explicit output_dir overrides both.
-        int_out = output_dir or int_out_dir or intdir
-        obs_out = output_dir or obs_out_dir or obsdir
-        self.INT_OUT_DIR = int_out.rstrip("/") + "/"
-        self.OBS_OUT_DIR = obs_out.rstrip("/") + "/"
+        int_out = output_dir or int_out_dir or intdir or ""
+        obs_out = output_dir or obs_out_dir or obsdir or ""
+        self.INT_OUT_DIR = int_out.rstrip("/") + "/" if int_out else ""
+        self.OBS_OUT_DIR = obs_out.rstrip("/") + "/" if obs_out else ""
         self.DERIVATIVES = "derivatives/GGIR-3.2.6/"  # Defined within the class
         self.system = system
 
+    def _project_jobs(self):
+        jobs = []
+        seen = set()
+        for project_type, input_dir, output_dir in (
+            ("int", self.INTDIR, self.INT_OUT_DIR),
+            ("obs", self.OBSDIR, self.OBS_OUT_DIR),
+        ):
+            if not input_dir or not os.path.isdir(input_dir.rstrip("/")):
+                continue
+            key = (input_dir.rstrip("/"), output_dir.rstrip("/"))
+            if key in seen:
+                continue
+            seen.add(key)
+            jobs.append(
+                {
+                    "project_type": project_type,
+                    "input_dir": input_dir.rstrip("/"),
+                    "output_dir": output_dir.rstrip("/"),
+                }
+            )
+        return jobs
+
+    def _ggir_env(self, input_dir: str) -> dict:
+        env = os.environ.copy()
+        if self.system == "extend" or "BikeExtend" in input_dir:
+            env["GGIR_LAYOUT"] = "extend"
+            env.setdefault("GGIR_USE_SLEEP_LOG", "TRUE")
+        else:
+            env.setdefault("GGIR_LAYOUT", "boost")
+        return env
+
     def run_gg(self):
         """
-        Run GGIR for both the internal and observational project directories.
-        After each GGIR run, invoke the QC pipeline for that project.
+        Run GGIR for configured project directories.
+        After each GGIR run, invoke the QC pipeline for BOOST profiles only.
         """
-        # Assume QC is available at this import path
         from act.utils.qc import QC
 
-        # Tabular logging data
         report = []
+        jobs = self._project_jobs()
+        if not jobs:
+            raise FileNotFoundError("No configured GGIR input directories exist.")
 
-        project_outputs = {
-            self.INTDIR: self.INT_OUT_DIR,
-            self.OBSDIR: self.OBS_OUT_DIR,
-        }
-
-        for project_dir in [self.INTDIR, self.OBSDIR]:
-            output_dir = project_outputs[project_dir]
-            # Construct command with new I/O flags
-            command = f"Rscript act/core/acc_new.R --input_dir {project_dir}"
-            command += f" --output_dir {output_dir}"
-            command += f" --deriv_dir {self.DERIVATIVES}"
-
-            project_type = "int" if project_dir.rstrip("/") == self.INTDIR.rstrip("/") else "obs"
+        for job in jobs:
+            project_type = job["project_type"]
+            project_dir = job["input_dir"]
+            output_dir = job["output_dir"]
+            command = (
+                f"Rscript act/core/acc_new.R --input_dir {project_dir}"
+                f" --output_dir {output_dir} --deriv_dir {self.DERIVATIVES}"
+            )
             status = "SUCCESS"
-            details = "GGIR and QC complete"
+            details = "GGIR complete"
+            run_qc = self.system != "extend"
 
             try:
-                # Execute the command in a new subprocess
-                logger.info("Running GGIR for %s project (Dir: %s)", project_type, project_dir)
+                logger.info(
+                    "Running GGIR for %s project (Dir: %s)",
+                    project_type,
+                    project_dir,
+                )
                 process = subprocess.Popen(
                     command,
                     shell=True,
@@ -81,9 +113,9 @@ class GG:
                     stderr=subprocess.STDOUT,
                     bufsize=1,
                     universal_newlines=True,
+                    env=self._ggir_env(project_dir),
                 )
 
-                # Stream output line-by-line
                 for line in process.stdout:
                     logger.info(line.rstrip())
 
@@ -95,32 +127,39 @@ class GG:
 
                 logger.info("GGIR completed successfully for %s project.", project_type)
 
-                # Run QC for this project
-                logger.info("Starting QC pipeline for %s project.", project_type)
-                qc_runner = QC(project_type, system=self.system)
-                qc_runner.qc()
-                logger.info("QC pipeline finished for %s project.", project_type)
+                if run_qc:
+                    logger.info("Starting QC pipeline for %s project.", project_type)
+                    qc_runner = QC(project_type, system=self.system)
+                    qc_runner.qc()
+                    logger.info("QC pipeline finished for %s project.", project_type)
+                    details = "GGIR and QC complete"
+                else:
+                    logger.info(
+                        "Skipping BOOST QC plots for %s profile (EXTEND layout).",
+                        self.system,
+                    )
 
-            except subprocess.CalledProcessError as e:
+            except subprocess.CalledProcessError:
                 status = "FAILED"
-                details = f"GGIR process exit {e.returncode}"
+                details = "GGIR process exit non-zero"
                 logger.exception("Error running GGIR for %s", project_dir)
-            except Exception as e:
+            except Exception as exc:
                 status = "ERROR"
-                details = str(e)
+                details = str(exc)
                 logger.exception("Unexpected error when processing %s", project_dir)
 
-            report.append({
-                "Project": project_type,
-                "Input": project_dir,
-                "Status": status,
-                "Details": details
-            })
+            report.append(
+                {
+                    "Project": project_type,
+                    "Input": project_dir,
+                    "Status": status,
+                    "Details": details,
+                }
+            )
 
-        # Print Tabular Report (similiar to Globus transfer)
-        print("\n" + "="*80)
+        print("\n" + "=" * 80)
         print(f"{'Project':<10} | {'Status':<10} | {'Details'}")
         print("-" * 80)
-        for r in report:
-            print(f"{r['Project']:<10} | {r['Status']:<10} | {r['Details']}")
-        print("="*80 + "\n")
+        for row in report:
+            print(f"{row['Project']:<10} | {row['Status']:<10} | {row['Details']}")
+        print("=" * 80 + "\n")
