@@ -257,8 +257,6 @@ def summarize_subject(
         if status != "ok":
             continue
         row["session_used"] = ses
-        row["fallback_used"] = "yes" if ses != preferred_session else "no"
-        row["status"] = "ok"
         row["n_nights"] = n_nights
         row["part5_path"] = str(part5)
         row["mean_N_atleast5minwakenight"] = round(
@@ -266,10 +264,20 @@ def summarize_subject(
         )
         row["mean_sleep_efficiency"] = round(means["sleep_efficiency"], 6)
         row["mean_dur_spt_sleep_min"] = round(means["dur_spt_sleep_min"], 6)
-        if ses != preferred_session:
+        if ses == preferred_session:
+            row["fallback_used"] = "no"
+            row["status"] = "ok"
+            row["note"] = ""
+        else:
+            # Do not call this "ok" — metrics are from a different wear period.
+            row["fallback_used"] = "yes"
+            row["status"] = "ok_fallback"
+            if preferred_session in sessions:
+                why = f"{preferred_session} present but unusable"
+            else:
+                why = f"{preferred_session} not present"
             row["note"] = (
-                f"{preferred_session} unavailable/unusable; "
-                f"used earliest viable {ses}"
+                f"{why}; metrics are from {ses} (not {preferred_session})"
             )
         return row
 
@@ -364,30 +372,28 @@ def main(argv: list[str] | None = None) -> int:
         writer.writerows(rows)
 
     ok = sum(1 for r in rows if r["status"] == "ok")
-    fb = sum(1 for r in rows if r["fallback_used"] == "yes")
+    fb = sum(1 for r in rows if r["status"] == "ok_fallback")
+    bad = len(rows) - ok - fb
     logger.info(
-        "Wrote %s (%d ok / %d total; %d used session fallback)",
+        "Wrote %s (%d ok / %d ok_fallback / %d other / %d total)",
         args.out,
         ok,
-        len(rows),
         fb,
+        bad,
+        len(rows),
     )
     for r in rows:
-        if r["status"] != "ok":
-            logger.warning(
-                "sub-%s %s | %s | available=%s",
-                r["study_id"],
-                r["status"],
-                r["note"],
-                r["available_sessions"],
-            )
-        elif r["fallback_used"] == "yes":
-            logger.info(
-                "sub-%s fallback %s -> %s",
-                r["study_id"],
-                r["session_requested"],
-                r["session_used"],
-            )
+        if r["status"] == "ok":
+            continue
+        log_fn = logger.info if r["status"] == "ok_fallback" else logger.warning
+        log_fn(
+            "sub-%s %s | used=%s | %s | available=%s",
+            r["study_id"],
+            r["status"],
+            r["session_used"] or "-",
+            r["note"],
+            r["available_sessions"],
+        )
     return 0
 
 

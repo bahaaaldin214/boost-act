@@ -145,8 +145,9 @@ BIDS/derivatives/GGIR-3.2.6/sub-2002/ses-accel1/output_ses-accel1/results/
 
 Average `N_atleast5minwakenight`, `sleep_efficiency`, `dur_spt_sleep_min` over available
 nights in `part5_daysummary_MM_L44.8M100.6V428.8_T5A5.csv`. Prefers `ses-accel1`; if
-missing/unusable, uses the **earliest viable** `ses-accel*` and sets `fallback_used=yes`
-plus `session_used` / `note`.
+missing/unusable, uses the **earliest viable** `ses-accel*` with `status=ok_fallback`
+(not `ok`), `fallback_used=yes`, and `session_used` / `note` stating metrics are
+**not** from the preferred session.
 
 **bahaa tools** (vosslink / Argon):
 
