@@ -31,7 +31,7 @@ Parsed by `act/utils/comparison_utils.py` (`lab_id`, date, filename).
 - `acc_new.R` supports external sleep logs via `loglocation`.
 - BOOST expects `sleep_log_intervention.csv` / `sleep_log_observational.csv` beside inputs.
 - EXTEND copy to LSS **did not bring sleep logs over** (no EXTEND copy script in `boost-act`).
-- Sleep-log suffix on RDSS is **not documented in this repo** — confirm with Zak if sync finds zero files.
+- Sleep-log RDSS naming: `{lab}_{date}_Sleep.csv` (ActiLife) or `{lab} ({date})SleepDiary.csv` (BOOST-style)
 
 ### Code changes in this branch
 
@@ -42,6 +42,19 @@ Parsed by `act/utils/comparison_utils.py` (`lab_id`, date, filename).
 5. `act/core/gg.py` — skip BOOST QC for `extend`, auto-set `GGIR_LAYOUT=extend`
 
 ## vosslink commands
+
+See also **Argon** section below if running on HPC instead of vosslink.
+
+**bahaa tools** (recommended):
+
+```bash
+bahaa pipeline extend              # sync sleep logs + GGIR
+bahaa pipeline extend-sync         # RDSS -> BIDS sleep logs only
+bahaa pipeline extend-ggir         # GGIR only
+bahaa pipeline extend-sync --dry-run
+```
+
+Manual equivalents:
 
 ```bash
 cd ~/zaccel/boost-act-final   # or your boost-act clone
@@ -77,6 +90,44 @@ Rscript act/core/acc_new.R \
   --layout extend
 ```
 
+## Argon commands (HPC)
+
+**bahaa tools** (after vosslink sync):
+
+```bash
+bahaa pipeline extend --skip-sync
+# or
+bahaa pipeline extend-ggir
+```
+
+Manual equivalents:
+
+- Projects path: `/Shared/vosslabhpc/Projects/BikeExtend/3-Experiment/2-Data/BIDS`
+- Home: `/Users/bmohammad/hbc-workspaces/boost-act` (avoid `/old_Users/bmohammad`)
+- RDSS **not mounted** on Argon — use `GGIR_USE_SLEEP_LOG=FALSE` or sync on vosslink
+- Conda: `act-newer` (create once with `conda env create -f act/core/environment.yml`)
+- Interactive compute: `qlogin -q VOSSHBC -pe smp 3 -l h_rt=24:00:00` before long runs
+- Match `GGIR_NCORES` to qlogin slot count
+
+```bash
+# Windows: argonhpc
+qlogin -q VOSSHBC -pe smp 3 -l h_rt=24:00:00
+screen -S extend-ggir
+
+source ~/miniconda3/etc/profile.d/conda.sh
+conda activate act-newer
+cd /Users/bmohammad/hbc-workspaces/boost-act
+git pull --ff-only origin feature/gt3x-compare-tests
+
+GGIR_NCORES=3 GGIR_LAYOUT=extend GGIR_USE_SLEEP_LOG=FALSE \
+Rscript act/core/acc_new.R \
+  --input_dir /Shared/vosslabhpc/Projects/BikeExtend/3-Experiment/2-Data/BIDS \
+  --output_dir /Shared/vosslabhpc/Projects/BikeExtend/3-Experiment/2-Data/BIDS \
+  --layout extend
+```
+
+Screen: detach `Ctrl+a` then `d`; reattach `screen -r`. Exit qlogin when done.
+
 ## Outputs
 
 Per session:
@@ -86,6 +137,30 @@ BIDS/derivatives/GGIR-3.2.6/sub-2002/ses-accel1/output_ses-accel1/results/
   QC/data_quality_report.csv
   part5_personsummary_MM*.csv
   part5_daysummary_MM*.csv
+```
+
+(Some runs nest an extra `output_ses-accel*/` level; the helper below finds either layout.)
+
+### Section-1 night averages (Giovanna / analysis pulls)
+
+Average `N_atleast5minwakenight`, `sleep_efficiency`, `dur_spt_sleep_min` over available
+nights in `part5_daysummary_MM_L44.8M100.6V428.8_T5A5.csv`. Prefers `ses-accel1`; if
+missing/unusable, uses the **earliest viable** `ses-accel*` and sets `fallback_used=yes`
+plus `session_used` / `note`.
+
+**bahaa tools** (vosslink / Argon):
+
+```bash
+bahaa pipeline extend-night-avg
+bahaa pipeline extend-night-avg --ids-file /path/to/ids.txt --out ~/logs/extend_avg.csv
+```
+
+Or directly from `boost-act`:
+
+```bash
+python scripts/extend/avg_accel1_night_metrics.py \
+  --ids-file scripts/extend/giovanna_section1_ids.txt \
+  --out logs/extend_accel1_night_averages.csv
 ```
 
 ## If sleep-log sync finds nothing

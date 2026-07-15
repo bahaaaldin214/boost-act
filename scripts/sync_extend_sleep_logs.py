@@ -3,10 +3,11 @@
 Copy EXTEND sleep-log CSVs from RDSS into the BikeExtend BIDS tree and build
 sleep_log_extend.csv for GGIR.
 
-RDSS layout (same as BOOST ingest):
+RDSS layout:
   /mnt/nfs/rdss/vosslab/Repositories/Accelerometer_Data/
     2002 (2022-05-10)RAW.csv
-    2002 (2022-05-10)SleepDiary.csv   # example; confirm suffix with Zak
+    2002 (2022-05-10)SleepDiary.csv   # BOOST-style
+    811_8-17-2018_Sleep.csv           # ActiLife export (underscore)
 
 EXTEND BIDS layout:
   .../BIDS/sub-2002/ses-accel1/beh/sub-2002_ses-accel1_accel.csv
@@ -32,14 +33,17 @@ DEFAULT_BIDS = (
 DEFAULT_RDSS = "/mnt/nfs/rdss/vosslab/Repositories/Accelerometer_Data"
 
 SLEEP_HINTS = ("sleep", "diary", "log", "bed", "spt")
-SKIP_HINTS = ("raw", "60sec", "gt3x", "accel", "export")
+SKIP_HINTS = ("raw", "60sec", "gt3x", "accel", "export", "report", "activity")
 
 
 def _parse_rdss_filename(filename: str) -> tuple[str, str] | None:
     match = re.match(r"^(\d+)\s+\(([^)]+)\)(.+)$", filename)
-    if not match:
-        return None
-    return match.group(1), match.group(2)
+    if match:
+        return match.group(1), match.group(2)
+    match = re.match(r"^(\d+)_([^_]+)_Sleep\.csv$", filename, re.IGNORECASE)
+    if match:
+        return match.group(1), match.group(2)
+    return None
 
 
 def _looks_like_sleep_file(filename: str) -> bool:

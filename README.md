@@ -137,7 +137,34 @@ python -m act.main --daysago 1 --token "$BOOST_TOKEN" --system vosslnx --reconci
 
 For routine ingest + GGIR runs, omit both manifest-only flags.
 
-For ad-hoc diagnostics, re-run plot generation with `python act/tests/gt3x/plots.py` (requires adjusting the hard-coded file path).
+## Argon commands
+
+Paths use `/Shared/vosslabhpc/...` (not vosslink `/mnt/nfs/lss/...`). RDSS is
+typically **not** available on Argon — skip sleep-log sync or run it on vosslink.
+
+Use real home **`/Users/bmohammad`**, not `/old_Users/bmohammad`.
+
+```bash
+argonhpc   # Windows shortcut, or: ssh -p 40 bmohammad@argon.hpc.uiowa.edu
+
+qlogin -q VOSSHBC -pe smp 3 -l h_rt=24:00:00
+screen -S extend-ggir
+
+source ~/miniconda3/etc/profile.d/conda.sh
+conda activate act-newer
+cd /Users/bmohammad/hbc-workspaces/boost-act
+git pull --ff-only origin feature/gt3x-compare-tests
+
+GGIR_NCORES=3 GGIR_LAYOUT=extend GGIR_USE_SLEEP_LOG=FALSE \
+Rscript act/core/acc_new.R \
+  --input_dir /Shared/vosslabhpc/Projects/BikeExtend/3-Experiment/2-Data/BIDS \
+  --output_dir /Shared/vosslabhpc/Projects/BikeExtend/3-Experiment/2-Data/BIDS \
+  --layout extend
+```
+
+Resume from GGIR cache: add `GGIR_OVERWRITE=FALSE` before the Rscript line.
+
+Screen: detach `Ctrl+a` then `d`; reattach `screen -r`.
 
 ## Configuration
 - Edit `act/utils/pipe.py` if new deployment targets or mounts are added.
