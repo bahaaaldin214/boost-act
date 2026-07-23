@@ -1,5 +1,6 @@
 from act.utils.save import Save
 from act.core.gg import GG
+import os
 
 
 class Pipe:
@@ -76,6 +77,8 @@ class Pipe:
         rebuild_manifest_only=False,
         reconcile_manifest_only=False,
         ggir_only=False,
+        subject_ids=None,
+        study_filter=None,
     ):
         # ensure class attrs are set for everyone (Pipe.INT_DIR etc.)
         type(self).configure(system)
@@ -86,11 +89,20 @@ class Pipe:
         self.rebuild_manifest_only = rebuild_manifest_only
         self.reconcile_manifest_only = reconcile_manifest_only
         self.ggir_only = ggir_only
+        self.subject_ids = subject_ids
+        self.study_filter = study_filter
+
+    def _apply_ggir_filters(self):
+        if self.subject_ids:
+            os.environ["GGIR_SUBJECTS"] = ",".join(str(s) for s in self.subject_ids)
+        if self.study_filter in {"obs", "int"}:
+            os.environ["GGIR_STUDY"] = self.study_filter
 
     def run_pipe(self):
         if self.ggir_only:
             int_out = self.output_dir or type(self).INT_OUT_DIR
             obs_out = self.output_dir or type(self).OBS_OUT_DIR
+            self._apply_ggir_filters()
             GG(
                 matched={},
                 intdir=type(self).INT_DIR,
@@ -108,6 +120,8 @@ class Pipe:
             token=self.token,
             daysago=self.daysago,
             symlink=False,
+            subject_ids=self.subject_ids,
+            study_filter=self.study_filter,
         )
 
         try:
@@ -136,6 +150,7 @@ class Pipe:
                 # otherwise each project uses its profile output dir.
                 int_out = self.output_dir or type(self).INT_OUT_DIR
                 obs_out = self.output_dir or type(self).OBS_OUT_DIR
+                self._apply_ggir_filters()
                 GG(
                     matched=matched,
                     intdir=type(self).INT_DIR,

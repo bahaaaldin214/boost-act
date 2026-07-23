@@ -13,6 +13,11 @@ from act.utils.comparison_utils import ID_COMPARISONS
 class Save:
     logger = logging.getLogger(__name__)
 
+    # REDCap sometimes stores dual-enrollment as a single comma-joined boost_id
+    # cell (e.g. "7178, 8066"). Historically these keys were silently dropped.
+    # Expand them into the duplicates path instead.
+    _COMBINED_BOOST_RE = re.compile(r"^(\d+)\s*,\s*(\d+)$")
+
     def __init__(
         self,
         intdir,
@@ -22,6 +27,8 @@ class Save:
         daysago=None,
         symlink=True,
         manifest_path="res/data.json",
+        subject_ids=None,
+        study_filter=None,
     ):
         if not rdssdir:
             raise ValueError(
@@ -32,10 +39,8 @@ class Save:
             rdss_dir=rdssdir, token=token, daysago=daysago
         ).compare_ids()
         self.matches = results["matches"]
-        self.matches.pop("6022, 7143", None)
-        self.matches.pop("7178, 8066", None)
-        self.matches.pop("8057, 7219", None)
         self.dupes = results["duplicates"]
+        self._expand_combined_boost_keys()
         self.INT_DIR = intdir
         self.OBS_DIR = obsdir
         self.RDSS_DIR = rdssdir
@@ -44,6 +49,93 @@ class Save:
         self.symlink = symlink
         self.manifest_path = manifest_path
         self.manifest = {}
+        self.subject_ids = (
+            {str(s).strip() for s in subject_ids if str(s).strip()}
+            if subject_ids
+            else None
+        )
+        study = (study_filter or "").strip().lower()
+        if study and study not in {"obs", "int", "both"}:
+            raise ValueError("study_filter must be one of: obs, int, both")
+        self.study_filter = None if study in {"", "both"} else study
+
+    def _expand_combined_boost_keys(self):
+        """Turn '7178, 8066'-style match keys into dual-enrollment duplicate rows."""
+        combined_keys = [
+            key
+            for key in list(self.matches.keys())
+            if self._COMBINED_BOOST_RE.match(str(key))
+        ]
+        for key in combined_keys:
+            match = self._COMBINED_BOOST_RE.match(str(key))
+            obs_id, int_id = match.group(1), match.group(2)
+            # Normalize which ID is OBS vs INT by band.
+            left, right = int(obs_id), int(int_id)
+            if left >= 8000 and right < 8000:
+                obs_id, int_id = str(right), str(left)
+            elif not (left < 8000 and right >= 8000):
+                self.logger.warning(
+                    "Skipping combined boost_id key %s; expected one OBS (<8000) "
+                    "and one INT (>=8000) id.",
+                    key,
+                )
+                self.matches.pop(key, None)
+                continue
+
+            records = self.matches.pop(key) or []
+            if not records:
+                continue
+            lab_id = str(records[0].get("labID") or records[0].get("lab_id") or "")
+            filenames = [r.get("filename") for r in records if r.get("filename")]
+            dates = [r.get("date") for r in records]
+            self.logger.info(
+                "Expanding combined boost_id %s -> obs=%s int=%s lab=%s (%s files)",
+                key,
+                obs_id,
+                int_id,
+                lab_id,
+                len(filenames),
+            )
+            for boost_id in (obs_id, int_id):
+                self.dupes.append(
+                    {
+                        "lab_id": lab_id,
+                        "boost_id": boost_id,
+                        "filenames": list(filenames),
+                        "dates": list(dates),
+                    }
+                )
+
+    def _filter_matches(self, matches):
+        filtered = matches
+        if self.subject_ids is not None:
+            filtered = {
+                sid: records
+                for sid, records in filtered.items()
+                if str(sid) in self.subject_ids
+            }
+            self.logger.info(
+                "Subject filter active (%s ids): %s remaining subjects",
+                len(self.subject_ids),
+                len(filtered),
+            )
+        if self.study_filter:
+            next_filtered = {}
+            for sid, records in filtered.items():
+                kept = [
+                    r
+                    for r in records
+                    if (r or {}).get("study", "").lower() == self.study_filter
+                ]
+                if kept:
+                    next_filtered[sid] = kept
+            filtered = next_filtered
+            self.logger.info(
+                "Study filter=%s: %s subjects remaining",
+                self.study_filter,
+                len(filtered),
+            )
+        return filtered
 
     def save(self):
         self.manifest = self._load_manifest(
@@ -58,6 +150,8 @@ class Save:
         # If duplicates exist, process and merge them.
         if not len(self.dupes) == 0:
             matches = self._handle_and_merge_duplicates(self.dupes)
+
+        matches = self._filter_matches(matches)
 
         for subject_id, records in matches.items():
             self._process_subject_transaction(subject_id, records)
@@ -1502,7 +1596,7 @@ class Save:
 
         1. Combine the filenames and dates from both entries and sort them chronologically.
         2. Pre-build the expected observational study session-1 path:
-                OBS_DIR/sub-<obs_boost_id>/accel/sub-<obs_boost_id>_ses-1_accel.csv
+                OBS_DIR/sub-<obs_boost_id>/accel/ses-1/sub-<obs_boost_id>_ses-1_accel.csv
             (Here the subject folder is built using the observational study ID, which must be less than 8000.)
         3. If that OBS session-1 file does not exist:
                 - Assign the earliest file (by date) as observational (study = 'obs', run = 1)
@@ -1570,12 +1664,13 @@ class Save:
             obs_boost_id = str(obs_entry["boost_id"])
             int_boost_id = str(int_entry["boost_id"])
 
-            # Build the expected OBS session 1 path.
+            # Build the expected OBS session 1 path (canonical ses-* layout).
             subject_folder_obs = f"sub-{obs_boost_id}"
             obs_session1_path = os.path.join(
                 self.OBS_DIR,
                 subject_folder_obs,
                 "accel",
+                "ses-1",
                 f"sub-{obs_boost_id}_ses-1_accel.csv",
             )
 

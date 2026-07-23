@@ -40,8 +40,8 @@ def _daysago_type(value: str) -> int:
 
 
 def _token_type(value: str) -> str:
-    if not value.strip():
-        raise argparse.ArgumentTypeError("token must be a non-empty string")
+    # Allow empty default so --ggir-only can omit --token; main() enforces
+    # non-empty token for ingest modes.
     return value
 
 
@@ -107,19 +107,40 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Run GGIR only (skip REDCap ingest, manifest, and group plots)",
     )
+    parser.add_argument(
+        "--subjects",
+        default="",
+        help=(
+            "Optional comma-separated BOOST subject IDs to process "
+            "(e.g. 7178,8066). Empty = all matched subjects."
+        ),
+    )
+    parser.add_argument(
+        "--study",
+        choices=("obs", "int", "both"),
+        default="both",
+        help="Limit ingest/GGIR to observational, intervention, or both (default both)",
+    )
     return parser
 
 
-def main(argv: list[str] | None = None) -> int:
-    from act.utils.group import Group
-    from act.utils.pipe import Pipe
+def _parse_subjects(raw: str) -> list[str] | None:
+    if not raw or not raw.strip():
+        return None
+    subjects = [part.strip() for part in raw.split(",") if part.strip()]
+    return subjects or None
 
+
+def main(argv: list[str] | None = None) -> int:
     _configure_logging()
     args = build_parser().parse_args(argv)
 
     if not args.ggir_only and not args.token.strip():
         logging.error("--token is required unless --ggir-only is set")
         return 2
+
+    from act.utils.group import Group
+    from act.utils.pipe import Pipe
 
     p = Pipe(
         token=args.token,
@@ -129,6 +150,8 @@ def main(argv: list[str] | None = None) -> int:
         rebuild_manifest_only=args.rebuild_manifest_only,
         reconcile_manifest_only=args.reconcile_manifest_only,
         ggir_only=args.ggir_only,
+        subject_ids=_parse_subjects(args.subjects),
+        study_filter=args.study,
     )
 
     try:

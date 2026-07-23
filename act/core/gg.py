@@ -65,6 +65,9 @@ class GG:
                     "output_dir": output_dir.rstrip("/"),
                 }
             )
+        study_filter = (os.environ.get("GGIR_STUDY") or "").strip().lower()
+        if study_filter in {"obs", "int"}:
+            jobs = [job for job in jobs if job["project_type"] == study_filter]
         return jobs
 
     def _ggir_env(self, input_dir: str) -> dict:

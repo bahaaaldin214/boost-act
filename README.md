@@ -137,6 +137,9 @@ python -m act.main --daysago 1 --token "$BOOST_TOKEN" --system vosslnx --reconci
 
 For routine ingest + GGIR runs, omit both manifest-only flags.
 
+**OBS / 7000-series (Ali reports, 7178/8066):** see [`docs/obs-7000s-vosslink.md`](docs/obs-7000s-vosslink.md).
+On vosslink prefer `bahaa pipeline ggir-status` → `ggir-stage-obs` → targeted `ggir --apply`.
+
 ## Argon commands
 
 Paths use `/Shared/vosslabhpc/...` (not vosslink `/mnt/nfs/lss/...`). RDSS is

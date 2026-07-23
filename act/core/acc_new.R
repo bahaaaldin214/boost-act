@@ -100,6 +100,17 @@ main <- function() {
 
   directories <- list.dirs(InputDirAbs, recursive = FALSE, full.names = TRUE)
   subdirs <- directories[grepl("sub-", basename(directories), fixed = TRUE)]
+
+  subjects_env <- Sys.getenv("GGIR_SUBJECTS", "")
+  if (nzchar(subjects_env)) {
+    wanted <- trimws(unlist(strsplit(subjects_env, ",", fixed = TRUE)))
+    wanted <- wanted[nzchar(wanted)]
+    if (length(wanted) > 0) {
+      keep <- basename(subdirs) %in% paste0("sub-", wanted)
+      subdirs <- subdirs[keep]
+      print(paste("GGIR_SUBJECTS filter:", paste(wanted, collapse = ",")))
+    }
+  }
   print(paste("subdirs found: ", length(subdirs)))
 
   FinalDerivPath <- file.path(OutputDirAbs, ProjectDerivDir)

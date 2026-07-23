@@ -28,7 +28,15 @@ Examples:
 python -m act.main --system local --daysago 7 --token "$BOOST_TOKEN"
 python -m act.main --token "$BOOST_TOKEN" --daysago 1 --system vosslnx --rebuild-manifest-only
 python -m act.main --token "$BOOST_TOKEN" --daysago 1 --system vosslnx --reconcile-manifest-only
+python -m act.main --token "$BOOST_TOKEN" --daysago 0 --system vosslnxft --subjects 7178,8066 --study both
+python -m act.main --daysago 0 --system vosslnxft --ggir-only --study obs --subjects 7178
 ```
+
+Subject / study filters:
+
+- `--subjects 7178,8066` limits ingest + GGIR to those BOOST IDs (also sets `GGIR_SUBJECTS` for R).
+- `--study obs|int|both` limits which study roots are ingested / run (also sets `GGIR_STUDY`).
+- Dual-enrollment (OBS+INT sharing one lab_id, or a comma-joined boost_id cell like `7178, 8066`) is expanded into the duplicate handler instead of being dropped.
 
 ## 3) Argument Reference
 

@@ -114,6 +114,24 @@ class ID_COMPARISONS:
         duplicate_rows = df[df.duplicated(keep=False)]
         df_cleaned = df.drop_duplicates(keep=False)
 
+        # Dual enrollment: same lab_id mapped to OBS (<8000) + INT (>=8000) boost IDs.
+        # Route those rows through the duplicates path so Save can split OBS vs INT sessions.
+        if not df_cleaned.empty and {"lab_id", "boost_id"}.issubset(df_cleaned.columns):
+            lab_boost_n = df_cleaned.groupby("lab_id")["boost_id"].nunique()
+            multi_lab_ids = lab_boost_n[lab_boost_n > 1].index.tolist()
+            if multi_lab_ids:
+                logger.info(
+                    "lab_id(s) with multiple boost_ids (dual enrollment): %s",
+                    ", ".join(map(str, multi_lab_ids)),
+                )
+                multi_rows = df_cleaned[df_cleaned["lab_id"].isin(multi_lab_ids)]
+                df_cleaned = df_cleaned[~df_cleaned["lab_id"].isin(multi_lab_ids)]
+                duplicate_rows = (
+                    pd.concat([duplicate_rows, multi_rows], ignore_index=True)
+                    if not duplicate_rows.empty
+                    else multi_rows.copy()
+                )
+
         if not duplicate_rows.empty:
             logger.info("duplicate rows found:\n%s", duplicate_rows)
         if df_cleaned.empty:
