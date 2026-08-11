@@ -252,7 +252,10 @@ Each profile defines:
 
 - intervention root (`INT_DIR`),
 - observational root (`OBS_DIR`),
-- RDSS root (`RDSS_DIR`).
+- RDSS root (`RDSS_DIR`),
+- optional GGIR output roots (`INT_OUT_DIR`, `OBS_OUT_DIR`; default to the matching input dir).
+
+On vosslink, `vosslnx` and `vosslnxft` both use production INT `act-int-ready` + sibling `output/`, and OBS `act-obs-final-test-2`.
 
 `argon` intentionally has `RDSS_DIR=None`, making ingest calls invalid by design.
 

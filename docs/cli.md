@@ -100,13 +100,12 @@ How it is used:
 
 - Parsed with fixed choices supplied by `Pipe.available_systems()`.
 - Passed into `Pipe.configure(system)`.
-- Sets class-level `Pipe.INT_DIR`, `Pipe.OBS_DIR`, and `Pipe.RDSS_DIR`.
+- Sets class-level `Pipe.INT_DIR`, `Pipe.OBS_DIR`, `Pipe.RDSS_DIR`, and optional `INT_OUT_DIR` / `OBS_OUT_DIR` (GGIR derivative roots; default to the matching input dir when omitted).
 - Propagates to `Save` for ingest/rebuild/reconcile and to `Group`/`QC` for downstream plotting/QC behavior.
 
 Current path profiles:
 
-- `vosslnx`: NFS-backed lab paths with RDSS enabled
-- `vosslnxft`: alternate NFS-backed final-test paths with RDSS enabled
+- `vosslnx` / `vosslnxft`: production NFS layout on vosslink — INT input `.../inputs/act-int-ready`, INT GGIR output `.../3-experiment/output` (derivatives under `output/derivatives/GGIR-3.2.6/`), OBS `.../data/act-obs-final-test-2`, RDSS enabled. Cron defaults to `vosslnxft`; the two profiles are kept aligned so either flag hits the same trees.
 - `local`: local mount aliases under `/mnt/lss` and `/mnt/rdss`
 - `argon`: shared LSS-like roots, but `RDSS_DIR` is currently `None`
 

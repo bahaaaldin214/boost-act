@@ -5,11 +5,12 @@ especially dual-enrollment **7178 / 8066**.
 
 ## Why 7000s looked "missing"
 
-1. Production cron uses `--system vosslnxft`:
+1. Production cron uses `--system vosslnxft` (same LSS trees as `vosslnx`):
    - INT input: `.../InterventionStudy/3-experiment/inputs/act-int-ready`
+   - INT GGIR output: `.../InterventionStudy/3-experiment/output`
    - OBS input: `.../ObservationalStudy/3-experiment/data/act-obs-final-test-2`
-2. **7178** accel CSV already exists under the older **vosslnx** OBS test tree
-   (`act-obs-test/sub-7178/...`) but was **never staged** into
+2. **7178** accel CSV already exists under the older **act-obs-test** staging
+   tree (`act-obs-test/sub-7178/...`) but was **never staged** into
    `act-obs-final-test-2`, so production GGIR never saw it.
 3. Dual-enrollment IDs were historically **dropped** when REDCap stored a
    comma-joined boost_id (`"7178, 8066"`). Code now expands those into the

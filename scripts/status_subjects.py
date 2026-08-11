@@ -205,10 +205,14 @@ def main(argv: list[str] | None = None) -> int:
             print(f"  rdss: {', '.join(row['rdss_sample'])}")
 
     if args.also_check_obs_test:
-        test_paths = _load_pipe_paths("vosslnx")
-        test_obs = Path(test_paths["OBS_DIR"])
+        # Legacy OBS staging tree (not a Pipe profile). vosslnx now matches
+        # production act-obs-final-test-2, so do not resolve via --system.
+        test_obs = Path(
+            "/mnt/nfs/lss/vosslabhpc/Projects/BOOST/ObservationalStudy/"
+            "3-experiment/data/act-obs-test"
+        )
         print("---")
-        print(f"also vosslnx OBS_DIR={test_obs}")
+        print(f"also act-obs-test OBS_DIR={test_obs}")
         for sid in ids:
             accel = test_obs / f"sub-{sid}" / "accel"
             sessions = (

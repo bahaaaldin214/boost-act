@@ -15,14 +15,19 @@ class Pipe:
     OBS_OUT_DIR: str = ""
 
     _SYSTEM_PATHS = {
+        # vosslnx and vosslnxft share the production LSS layout on vosslink:
+        # INT input = Globus landing (act-int-ready); INT GGIR → sibling output/.
+        # OBS = act-obs-final-test-2 (legacy act-obs-test is staging-only; see
+        # scripts/status_subjects.py --also-check-obs-test). Cron defaults to
+        # vosslnxft; keep both profiles in sync so accidental --system vosslnx
+        # does not write derivatives under the input tree.
         "vosslnx": dict(
-            INT_DIR="/mnt/nfs/lss/vosslabhpc/Projects/BOOST/InterventionStudy/3-experiment/data/act-int-test",
-            OBS_DIR="/mnt/nfs/lss/vosslabhpc/Projects/BOOST/ObservationalStudy/3-experiment/data/act-obs-test",
+            INT_DIR="/mnt/nfs/lss/vosslabhpc/Projects/BOOST/InterventionStudy/3-experiment/inputs/act-int-ready",
+            INT_OUT_DIR="/mnt/nfs/lss/vosslabhpc/Projects/BOOST/InterventionStudy/3-experiment/output",
+            OBS_DIR="/mnt/nfs/lss/vosslabhpc/Projects/BOOST/ObservationalStudy/3-experiment/data/act-obs-final-test-2",
             RDSS_DIR="/mnt/nfs/rdss/vosslab/Repositories/Accelerometer_Data",
         ),
         "vosslnxft": dict(
-            # Intervention input is now the canonical Globus/manual landing zone;
-            # derivatives are written to a separate sibling output/ folder.
             INT_DIR="/mnt/nfs/lss/vosslabhpc/Projects/BOOST/InterventionStudy/3-experiment/inputs/act-int-ready",
             INT_OUT_DIR="/mnt/nfs/lss/vosslabhpc/Projects/BOOST/InterventionStudy/3-experiment/output",
             OBS_DIR="/mnt/nfs/lss/vosslabhpc/Projects/BOOST/ObservationalStudy/3-experiment/data/act-obs-final-test-2",
