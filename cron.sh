@@ -24,8 +24,6 @@ LOG_FILE="logs/${SYSTEM}/$(date +%Y%m%d_%H%M%S).log"
 export LOG_FILE
 python -m act.main --daysago "${DAYS_AGO}" --token "${BOOST_TOKEN}" --system "${SYSTEM}" >> "${LOG_FILE}" 2>&1
 
-if ! git diff --quiet; then
-  git add .
-  git commit -m "automated commit by vosslab linux"
-  git push
-fi
+# No auto-commit: GGIR outputs are written to the LSS share (outside this repo),
+# and run logs live under logs/ which is git-ignored. Auto-committing logs used
+# to diverge the box from the fork and break `git pull --ff-only` on the next run.

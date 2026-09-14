@@ -1,6 +1,11 @@
 import os
+import glob
 import json
+import argparse
 import pandas as pd
+import matplotlib
+
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import seaborn as sns
 
@@ -15,14 +20,21 @@ import seaborn as sns
 
 class ACT_PLOTS:
 
-    def __init__(self, sub, ses, person, day):
+    def __init__(self, sub, ses, person, day, out_dir=None):
         self.df_person = pd.read_csv(person)
         self.df_day = pd.read_csv(day)
         self.sub = str(sub).split("-")[1]
         self.ses = str(ses).split("-")[1]
+        self.out_dir = out_dir
         self.create_paths()
 
     def create_paths(self):
+        # Explicit override: write plots straight into the given directory
+        if self.out_dir is not None:
+            self.path = self.out_dir
+            os.makedirs(self.path, exist_ok=True)
+            return None
+
         if str(self.sub).startswith("9"):
             proj = "int"
             site = "NE"
@@ -144,7 +156,7 @@ class ACT_PLOTS:
         )
         ax.spines[["top", "left", "right", "bottom"]].set_visible(False)
         plt.tight_layout()
-        plt.savefig(os.path.join(self.path, "summary_plot"), bbox_inches="tight")
+        plt.savefig(os.path.join(self.path, "summary_plot.png"), bbox_inches="tight")
         plt.close()
         return None
 
@@ -182,8 +194,16 @@ class ACT_PLOTS:
         fig, ax = plt.subplots(figsize=(10, 3 + 0.3 * len(df_day)))
 
         # --- 1) Compute custom y-positions with extra space between sessions ---
-        # extract session numbers from filename
-        session_nums = df_day["filename"].str.extract(r"ses-(\d+)")[0].astype(int)
+        # extract session numbers from filename; fall back to the session passed
+        # in when the GGIR filename carries no ses-N token (e.g. raw inputs that
+        # were not renamed to sub-####_ses-#_accel by the pipeline)
+        fallback_ses = "".join(ch for ch in str(self.ses) if ch.isdigit()) or "1"
+        session_nums = (
+            df_day["filename"]
+            .str.extract(r"ses-(\d+)")[0]
+            .fillna(fallback_ses)
+            .astype(int)
+        )
         default_space = 1.9
         extra_space = 0.8
         y_positions = []
@@ -288,7 +308,7 @@ class ACT_PLOTS:
 
         fig.suptitle("Daily Activity Composition", fontsize=14, y=0.95)
         plt.tight_layout()
-        plt.savefig(os.path.join(self.path, "daily_plot"))
+        plt.savefig(os.path.join(self.path, "daily_plot.png"))
         plt.close()
         return None
 
@@ -336,3 +356,69 @@ def create_json(data_folder, out_file="data.json"):
         json.dump(master_data, f, indent=2)
 
     return master_data
+
+
+def _find_summary(results_dir, kind):
+    """Locate a part5 MM summary file ('person' or 'day') in a results dir."""
+    matches = sorted(
+        glob.glob(os.path.join(results_dir, f"part5_{kind}summary_MM*.csv"))
+    )
+    if not matches:
+        raise FileNotFoundError(
+            f"No part5_{kind}summary_MM*.csv found in {results_dir}"
+        )
+    return matches[0]
+
+
+def render_from_results(results_dir, out_dir, sub=None, ses="ses-1"):
+    """
+    Render summary_plot.png and daily_plot.png from a GGIR results directory.
+
+    results_dir : folder containing part5_personsummary_MM*.csv and
+                  part5_daysummary_MM*.csv (e.g. .../output_ses-1/results).
+    out_dir     : where the two PNGs are written.
+    sub         : subject id like 'sub-9002'; inferred from the summary filename
+                  when omitted.
+    """
+    person = _find_summary(results_dir, "person")
+    day = _find_summary(results_dir, "day")
+
+    if sub is None:
+        first = pd.read_csv(person, nrows=1)
+        ident = str(first["ID"].iloc[0]) if "ID" in first.columns else "0000"
+        sub = f"sub-{ident}"
+
+    plotter = ACT_PLOTS(sub, ses, person=person, day=day, out_dir=out_dir)
+    plotter.summary_plot()
+    plotter.day_plots()
+    print(f"Wrote plots to {out_dir} (person={os.path.basename(person)}, "
+          f"day={os.path.basename(day)})")
+    return out_dir
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Render GGIR activity-composition plots from a results dir."
+    )
+    parser.add_argument(
+        "results_dir",
+        help="GGIR results directory containing part5_*summary_MM*.csv files",
+    )
+    parser.add_argument(
+        "-o",
+        "--out",
+        default=None,
+        help="Output directory for PNGs (default: <results_dir>/plots)",
+    )
+    parser.add_argument(
+        "--sub", default=None, help="Subject id, e.g. sub-9002 (inferred if omitted)"
+    )
+    parser.add_argument("--ses", default="ses-1", help="Session id (default: ses-1)")
+    args = parser.parse_args()
+
+    out_dir = args.out or os.path.join(args.results_dir, "plots")
+    render_from_results(args.results_dir, out_dir, sub=args.sub, ses=args.ses)
+
+
+if __name__ == "__main__":
+    main()

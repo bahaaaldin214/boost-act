@@ -250,15 +250,23 @@ def test_main_smoke_invokes_pipe_and_group(monkeypatch):
             token,
             daysago,
             system,
+            output_dir=None,
             rebuild_manifest_only=False,
             reconcile_manifest_only=False,
+            ggir_only=False,
+            subject_ids=None,
+            study_filter=None,
         ):
             call_state["pipe_args"] = {
                 "token": token,
                 "daysago": daysago,
                 "system": system,
+                "output_dir": output_dir,
                 "rebuild_manifest_only": rebuild_manifest_only,
                 "reconcile_manifest_only": reconcile_manifest_only,
+                "ggir_only": ggir_only,
+                "subject_ids": subject_ids,
+                "study_filter": study_filter,
             }
 
         def run_pipe(self):
@@ -310,8 +318,12 @@ def test_main_smoke_invokes_pipe_and_group(monkeypatch):
         "token": "token-value",
         "daysago": 2,
         "system": "local",
+        "output_dir": None,
         "rebuild_manifest_only": False,
         "reconcile_manifest_only": False,
+        "ggir_only": False,
+        "subject_ids": None,
+        "study_filter": "both",
     }
     assert call_state["run_pipe"] == 1
     assert call_state["group_systems"] == ["local", "person", "local", "session"]
@@ -326,15 +338,23 @@ def test_main_manifest_only_skips_plotting(monkeypatch):
             token,
             daysago,
             system,
+            output_dir=None,
             rebuild_manifest_only=False,
             reconcile_manifest_only=False,
+            ggir_only=False,
+            subject_ids=None,
+            study_filter=None,
         ):
             call_state["pipe_args"] = {
                 "token": token,
                 "daysago": daysago,
                 "system": system,
+                "output_dir": output_dir,
                 "rebuild_manifest_only": rebuild_manifest_only,
                 "reconcile_manifest_only": reconcile_manifest_only,
+                "ggir_only": ggir_only,
+                "subject_ids": subject_ids,
+                "study_filter": study_filter,
             }
 
         def run_pipe(self):
@@ -386,8 +406,12 @@ def test_main_manifest_only_skips_plotting(monkeypatch):
         "token": "token-value",
         "daysago": 2,
         "system": "local",
+        "output_dir": None,
         "rebuild_manifest_only": True,
         "reconcile_manifest_only": False,
+        "ggir_only": False,
+        "subject_ids": None,
+        "study_filter": "both",
     }
     assert call_state["run_pipe"] == 1
     assert call_state["group_inits"] == 0
@@ -402,15 +426,23 @@ def test_main_reconcile_only_returns_zero_and_skips_plotting(monkeypatch):
             token,
             daysago,
             system,
+            output_dir=None,
             rebuild_manifest_only=False,
             reconcile_manifest_only=False,
+            ggir_only=False,
+            subject_ids=None,
+            study_filter=None,
         ):
             call_state["pipe_args"] = {
                 "token": token,
                 "daysago": daysago,
                 "system": system,
+                "output_dir": output_dir,
                 "rebuild_manifest_only": rebuild_manifest_only,
                 "reconcile_manifest_only": reconcile_manifest_only,
+                "ggir_only": ggir_only,
+                "subject_ids": subject_ids,
+                "study_filter": study_filter,
             }
 
         def run_pipe(self):
@@ -465,8 +497,12 @@ def test_main_reconcile_only_returns_zero_and_skips_plotting(monkeypatch):
         "token": "token-value",
         "daysago": 2,
         "system": "local",
+        "output_dir": None,
         "rebuild_manifest_only": False,
         "reconcile_manifest_only": True,
+        "ggir_only": False,
+        "subject_ids": None,
+        "study_filter": "both",
     }
     assert call_state["run_pipe"] == 1
     assert call_state["group_inits"] == 0
@@ -479,8 +515,12 @@ def test_main_reconcile_only_returns_nonzero_on_failures(monkeypatch):
             token,
             daysago,
             system,
+            output_dir=None,
             rebuild_manifest_only=False,
             reconcile_manifest_only=False,
+            ggir_only=False,
+            subject_ids=None,
+            study_filter=None,
         ):
             pass
 
@@ -540,8 +580,12 @@ def test_main_manifest_only_returns_nonzero_on_rebuild_error(monkeypatch):
             token,
             daysago,
             system,
+            output_dir=None,
             rebuild_manifest_only=False,
             reconcile_manifest_only=False,
+            ggir_only=False,
+            subject_ids=None,
+            study_filter=None,
         ):
             pass
 
@@ -634,7 +678,6 @@ def test_parse_args_valid_reconcile_manifest_only():
         ["--token", "abc123", "--daysago", "3"],
         ["--token", "abc123", "--daysago", "-1", "--system", "local"],
         ["--token", "abc123", "--daysago", "three", "--system", "local"],
-        ["--token", "", "--daysago", "3", "--system", "local"],
         ["--token", "abc123", "--daysago", "3", "--system", "unknown"],
         [
             "--token",
@@ -656,3 +699,22 @@ def test_parse_args_invalid_invocations(argv):
         parser.parse_args(argv)
 
     assert exc.value.code == 2
+
+
+def test_main_rejects_empty_token_without_ggir_only(monkeypatch):
+    main_mod = importlib.import_module("act.main")
+    monkeypatch.setattr(main_mod, "_configure_logging", lambda: None)
+    code = main_mod.main(
+        ["--token", "", "--daysago", "1", "--system", "local"]
+    )
+    assert code == 2
+
+
+def test_parse_args_allows_empty_token_with_ggir_only():
+    main_mod = importlib.import_module("act.main")
+    args = main_mod.build_parser().parse_args(
+        ["--daysago", "0", "--system", "vosslnxft", "--ggir-only", "--subjects", "7178"]
+    )
+    assert args.ggir_only is True
+    assert args.subjects == "7178"
+    assert args.token == ""

@@ -30,13 +30,14 @@ class QC:
         Pipe.configure(system)
         self.system = system
 
-        # Determine the expected days worn based on project type
+        # Determine the expected days worn based on project type. Derivatives are
+        # read from the per-project output root (may differ from the input dir).
         if project == "obs":
-            self.base_dir = os.path.join(Pipe.OBS_DIR, "derivatives", "GGIR-3.2.6")
+            self.base_dir = os.path.join(Pipe.OBS_OUT_DIR, "derivatives", "GGIR-3.2.6")
             self.n_days_worn = 7
         elif project == "int":
             self.n_days_worn = 9
-            self.base_dir = os.path.join(Pipe.INT_DIR, "derivatives", "GGIR-3.2.6")
+            self.base_dir = os.path.join(Pipe.INT_OUT_DIR, "derivatives", "GGIR-3.2.6")
         else:
             raise ValueError("Project must be 'obs' or 'int'")
 

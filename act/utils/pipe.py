@@ -1,5 +1,6 @@
 from act.utils.save import Save
 from act.core.gg import GG
+import os
 
 
 class Pipe:
@@ -7,27 +8,49 @@ class Pipe:
     INT_DIR: str = ""
     OBS_DIR: str = ""
     RDSS_DIR: str = ""
+    # Output roots where GGIR derivatives are written/read. When a profile omits
+    # them they default to the matching input dir (legacy behaviour: derivatives
+    # live under the input folder). GGIR writes <OUT_DIR>/derivatives/GGIR-3.2.6/.
+    INT_OUT_DIR: str = ""
+    OBS_OUT_DIR: str = ""
 
     _SYSTEM_PATHS = {
+        # vosslnx and vosslnxft share the production LSS layout on vosslink:
+        # INT input = Globus landing (act-int-ready); INT GGIR → sibling output/.
+        # OBS input = act-obs-ready; OBS GGIR → sibling outputs/ (HBC#10).
+        # Legacy co-located tree: data/act-obs-final-test-2 (keep until #11).
+        # Cron defaults to vosslnxft; keep both profiles in sync.
         "vosslnx": dict(
-            INT_DIR="/mnt/nfs/lss/vosslabhpc/Projects/BOOST/InterventionStudy/3-experiment/data/act-int-test",
-            OBS_DIR="/mnt/nfs/lss/vosslabhpc/Projects/BOOST/ObservationalStudy/3-experiment/data/act-obs-test",
+            INT_DIR="/mnt/nfs/lss/vosslabhpc/Projects/BOOST/InterventionStudy/3-experiment/inputs/act-int-ready",
+            INT_OUT_DIR="/mnt/nfs/lss/vosslabhpc/Projects/BOOST/InterventionStudy/3-experiment/output",
+            OBS_DIR="/mnt/nfs/lss/vosslabhpc/Projects/BOOST/ObservationalStudy/3-experiment/inputs/act-obs-ready",
+            OBS_OUT_DIR="/mnt/nfs/lss/vosslabhpc/Projects/BOOST/ObservationalStudy/3-experiment/outputs",
             RDSS_DIR="/mnt/nfs/rdss/vosslab/Repositories/Accelerometer_Data",
         ),
         "vosslnxft": dict(
-            INT_DIR="/mnt/nfs/lss/vosslabhpc/Projects/BOOST/InterventionStudy/3-experiment/data/act-int-final-test-2",
-            OBS_DIR="/mnt/nfs/lss/vosslabhpc/Projects/BOOST/ObservationalStudy/3-experiment/data/act-obs-final-test-2",
+            INT_DIR="/mnt/nfs/lss/vosslabhpc/Projects/BOOST/InterventionStudy/3-experiment/inputs/act-int-ready",
+            INT_OUT_DIR="/mnt/nfs/lss/vosslabhpc/Projects/BOOST/InterventionStudy/3-experiment/output",
+            OBS_DIR="/mnt/nfs/lss/vosslabhpc/Projects/BOOST/ObservationalStudy/3-experiment/inputs/act-obs-ready",
+            OBS_OUT_DIR="/mnt/nfs/lss/vosslabhpc/Projects/BOOST/ObservationalStudy/3-experiment/outputs",
             RDSS_DIR="/mnt/nfs/rdss/vosslab/Repositories/Accelerometer_Data",
         ),
         "local": dict(
             INT_DIR="/mnt/lss/Projects/BOOST/InterventionStudy/3-experiment/data/act-int-final-test-2",
-            OBS_DIR="/mnt/lss/Projects/BOOST/ObservationalStudy/3-experiment/data/act-obs-final-test-2",
+            OBS_DIR="/mnt/lss/Projects/BOOST/ObservationalStudy/3-experiment/inputs/act-obs-ready",
+            OBS_OUT_DIR="/mnt/lss/Projects/BOOST/ObservationalStudy/3-experiment/outputs",
             RDSS_DIR="/mnt/rdss/VossLab/Repositories/Accelerometer_Data",
         ),
         "argon": dict(
             INT_DIR="/Shared/vosslabhpc/Projects/BOOST/InterventionStudy/3-experiment/data/act-int-test",
             OBS_DIR="/Shared/vosslabhpc/Projects/BOOST/ObservationalStudy/3-experiment/data/act-obs-test",
             RDSS_DIR=None,
+        ),
+        "extend": dict(
+            INT_DIR="/mnt/nfs/lss/vosslabhpc/Projects/BikeExtend/3-Experiment/2-Data/BIDS",
+            OBS_DIR="",
+            INT_OUT_DIR="/mnt/nfs/lss/vosslabhpc/Projects/BikeExtend/3-Experiment/2-Data/BIDS",
+            OBS_OUT_DIR="",
+            RDSS_DIR="/mnt/nfs/rdss/vosslab/Repositories/Accelerometer_Data",
         ),
     }
 
@@ -48,24 +71,55 @@ class Pipe:
         cls.INT_DIR = paths["INT_DIR"]
         cls.OBS_DIR = paths["OBS_DIR"]
         cls.RDSS_DIR = paths["RDSS_DIR"]
+        # Output dirs default to the matching input dir when not specified.
+        cls.INT_OUT_DIR = paths.get("INT_OUT_DIR") or paths["INT_DIR"]
+        cls.OBS_OUT_DIR = paths.get("OBS_OUT_DIR") or paths["OBS_DIR"]
 
     def __init__(
         self,
         token,
         daysago,
         system="vosslnx",
+        output_dir=None,
         rebuild_manifest_only=False,
         reconcile_manifest_only=False,
+        ggir_only=False,
+        subject_ids=None,
+        study_filter=None,
     ):
         # ensure class attrs are set for everyone (Pipe.INT_DIR etc.)
         type(self).configure(system)
         self.token = token
         self.daysago = daysago
         self.system = system
+        self.output_dir = output_dir
         self.rebuild_manifest_only = rebuild_manifest_only
         self.reconcile_manifest_only = reconcile_manifest_only
+        self.ggir_only = ggir_only
+        self.subject_ids = subject_ids
+        self.study_filter = study_filter
+
+    def _apply_ggir_filters(self):
+        if self.subject_ids:
+            os.environ["GGIR_SUBJECTS"] = ",".join(str(s) for s in self.subject_ids)
+        if self.study_filter in {"obs", "int"}:
+            os.environ["GGIR_STUDY"] = self.study_filter
 
     def run_pipe(self):
+        if self.ggir_only:
+            int_out = self.output_dir or type(self).INT_OUT_DIR
+            obs_out = self.output_dir or type(self).OBS_OUT_DIR
+            self._apply_ggir_filters()
+            GG(
+                matched={},
+                intdir=type(self).INT_DIR,
+                obsdir=type(self).OBS_DIR,
+                system=self.system,
+                int_out_dir=int_out,
+                obs_out_dir=obs_out,
+            ).run_gg()
+            return None
+
         save_instance = Save(
             intdir=type(self).INT_DIR,
             obsdir=type(self).OBS_DIR,
@@ -73,6 +127,8 @@ class Pipe:
             token=self.token,
             daysago=self.daysago,
             symlink=False,
+            subject_ids=self.subject_ids,
+            study_filter=self.study_filter,
         )
 
         try:
@@ -97,11 +153,18 @@ class Pipe:
                 json.dump(matched, f, indent=2)
 
             if not self.rebuild_manifest_only:
+                # Per-project output roots: an explicit --output-dir overrides both;
+                # otherwise each project uses its profile output dir.
+                int_out = self.output_dir or type(self).INT_OUT_DIR
+                obs_out = self.output_dir or type(self).OBS_OUT_DIR
+                self._apply_ggir_filters()
                 GG(
                     matched=matched,
                     intdir=type(self).INT_DIR,
                     obsdir=type(self).OBS_DIR,
                     system=self.system,
+                    int_out_dir=int_out,
+                    obs_out_dir=obs_out,
                 ).run_gg()
         finally:
             Save.remove_symlink_directories([type(self).INT_DIR, type(self).OBS_DIR])
