@@ -40,6 +40,11 @@ def _daysago_type(value: str) -> int:
 
 
 def _token_type(value: str) -> str:
+    # Allow empty for optional --targeting-token; --token stays required=True.
+    return value
+
+
+def _required_token_type(value: str) -> str:
     if not value.strip():
         raise argparse.ArgumentTypeError("token must be a non-empty string")
     return value
@@ -69,9 +74,22 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--token",
-        type=_token_type,
+        type=_required_token_type,
         required=True,
-        help="RedCap API token (required, non-empty)",
+        help=(
+            "Observational REDCap API token (BOOST_TOKEN) for reports 43327/41693"
+        ),
+    )
+    parser.add_argument(
+        "--targeting-token",
+        type=_token_type,
+        default="",
+        dest="targeting_token",
+        help=(
+            "Intervention/Targeting REDCap API token for report 53846 "
+            "(defaults to TARGETING_TOKEN or DEBRIEF_FITNESS_TOKEN env). "
+            "Pass empty string to skip INT report."
+        ),
     )
     parser.add_argument(
         "--daysago",
@@ -106,12 +124,24 @@ def main(argv: list[str] | None = None) -> int:
     _configure_logging()
     args = build_parser().parse_args(argv)
 
+    targeting_token = (
+        (args.targeting_token or "").strip()
+        or os.environ.get("TARGETING_TOKEN", "").strip()
+        or os.environ.get("DEBRIEF_FITNESS_TOKEN", "").strip()
+    )
+    if not targeting_token:
+        logging.warning(
+            "No Targeting token (--targeting-token / TARGETING_TOKEN); "
+            "INT report 53846 will be skipped"
+        )
+
     p = Pipe(
         token=args.token,
         daysago=args.daysago,
         system=args.system,
         rebuild_manifest_only=args.rebuild_manifest_only,
         reconcile_manifest_only=args.reconcile_manifest_only,
+        targeting_token=targeting_token or None,
     )
 
     try:

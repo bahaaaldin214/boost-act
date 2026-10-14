@@ -15,7 +15,7 @@ Primary entrypoint: `python -m act.main`.
 
 ### In Scope
 
-- Pulling subject mappings from REDCap report `43327`.
+- Pulling subject mappings from REDCap reports `43327` + `41693` (Observational, `BOOST_TOKEN`) and `53846` (Targeting/Intervention, `TARGETING_TOKEN`); merge by `boost_id` (later reports override lab conflicts). Folder routing still by boost band: `6001–7999` → OBS, `≥8000` → INT.
 - Reading RDSS filenames and extracting metadata (`labID`, acquisition date, filename).
 - Matching BOOST IDs to RDSS lab IDs and handling duplicates.
 - Copying canonical accelerometer files to LSS study/session destinations.

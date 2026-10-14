@@ -252,6 +252,7 @@ def test_main_smoke_invokes_pipe_and_group(monkeypatch):
             system,
             rebuild_manifest_only=False,
             reconcile_manifest_only=False,
+            targeting_token=None,
         ):
             call_state["pipe_args"] = {
                 "token": token,
@@ -259,6 +260,7 @@ def test_main_smoke_invokes_pipe_and_group(monkeypatch):
                 "system": system,
                 "rebuild_manifest_only": rebuild_manifest_only,
                 "reconcile_manifest_only": reconcile_manifest_only,
+                "targeting_token": targeting_token,
             }
 
         def run_pipe(self):
@@ -287,6 +289,8 @@ def test_main_smoke_invokes_pipe_and_group(monkeypatch):
     _install_module(monkeypatch, "act.utils.pipe", pipe_mod)
     _install_module(monkeypatch, "act.utils.group", group_mod)
 
+    monkeypatch.setenv("TARGETING_TOKEN", "")
+    monkeypatch.setenv("DEBRIEF_FITNESS_TOKEN", "")
     monkeypatch.setattr(
         sys,
         "argv",
@@ -312,6 +316,7 @@ def test_main_smoke_invokes_pipe_and_group(monkeypatch):
         "system": "local",
         "rebuild_manifest_only": False,
         "reconcile_manifest_only": False,
+        "targeting_token": None,
     }
     assert call_state["run_pipe"] == 1
     assert call_state["group_systems"] == ["local", "person", "local", "session"]
@@ -328,6 +333,7 @@ def test_main_manifest_only_skips_plotting(monkeypatch):
             system,
             rebuild_manifest_only=False,
             reconcile_manifest_only=False,
+            targeting_token=None,
         ):
             call_state["pipe_args"] = {
                 "token": token,
@@ -335,6 +341,7 @@ def test_main_manifest_only_skips_plotting(monkeypatch):
                 "system": system,
                 "rebuild_manifest_only": rebuild_manifest_only,
                 "reconcile_manifest_only": reconcile_manifest_only,
+                "targeting_token": targeting_token,
             }
 
         def run_pipe(self):
@@ -363,6 +370,8 @@ def test_main_manifest_only_skips_plotting(monkeypatch):
     _install_module(monkeypatch, "act.utils.pipe", pipe_mod)
     _install_module(monkeypatch, "act.utils.group", group_mod)
 
+    monkeypatch.setenv("TARGETING_TOKEN", "")
+    monkeypatch.setenv("DEBRIEF_FITNESS_TOKEN", "")
     monkeypatch.setattr(
         sys,
         "argv",
@@ -388,6 +397,7 @@ def test_main_manifest_only_skips_plotting(monkeypatch):
         "system": "local",
         "rebuild_manifest_only": True,
         "reconcile_manifest_only": False,
+        "targeting_token": None,
     }
     assert call_state["run_pipe"] == 1
     assert call_state["group_inits"] == 0
@@ -404,6 +414,7 @@ def test_main_reconcile_only_returns_zero_and_skips_plotting(monkeypatch):
             system,
             rebuild_manifest_only=False,
             reconcile_manifest_only=False,
+            targeting_token=None,
         ):
             call_state["pipe_args"] = {
                 "token": token,
@@ -411,6 +422,7 @@ def test_main_reconcile_only_returns_zero_and_skips_plotting(monkeypatch):
                 "system": system,
                 "rebuild_manifest_only": rebuild_manifest_only,
                 "reconcile_manifest_only": reconcile_manifest_only,
+                "targeting_token": targeting_token,
             }
 
         def run_pipe(self):
@@ -442,6 +454,8 @@ def test_main_reconcile_only_returns_zero_and_skips_plotting(monkeypatch):
     _install_module(monkeypatch, "act.utils.pipe", pipe_mod)
     _install_module(monkeypatch, "act.utils.group", group_mod)
 
+    monkeypatch.setenv("TARGETING_TOKEN", "")
+    monkeypatch.setenv("DEBRIEF_FITNESS_TOKEN", "")
     monkeypatch.setattr(
         sys,
         "argv",
@@ -467,6 +481,7 @@ def test_main_reconcile_only_returns_zero_and_skips_plotting(monkeypatch):
         "system": "local",
         "rebuild_manifest_only": False,
         "reconcile_manifest_only": True,
+        "targeting_token": None,
     }
     assert call_state["run_pipe"] == 1
     assert call_state["group_inits"] == 0
@@ -481,6 +496,7 @@ def test_main_reconcile_only_returns_nonzero_on_failures(monkeypatch):
             system,
             rebuild_manifest_only=False,
             reconcile_manifest_only=False,
+            targeting_token=None,
         ):
             pass
 
@@ -542,6 +558,7 @@ def test_main_manifest_only_returns_nonzero_on_rebuild_error(monkeypatch):
             system,
             rebuild_manifest_only=False,
             reconcile_manifest_only=False,
+            targeting_token=None,
         ):
             pass
 

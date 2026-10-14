@@ -43,7 +43,7 @@ How it is used:
 
 - Passed from `act.main` into `Pipe(token=...)`.
 - Passed from `Pipe` into `Save(token=...)`.
-- Used by `ID_COMPARISONS._return_report()` to call the REDCap API and export report `43327`.
+- Used by `ID_COMPARISONS._return_report()` for Observational reports `43327` and `41693`. Intervention report `53846` uses `--targeting-token` / `TARGETING_TOKEN`.
 
 Operational notes:
 

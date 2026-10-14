@@ -8,15 +8,54 @@ from io import StringIO
 
 logger = logging.getLogger(__name__)
 
+# OBS project (BOOST_TOKEN): legacy 43327 kept; 41693 = Names & ID Numbers.
+# Targeting / INT (TARGETING_TOKEN): 53846 = boost↔lab for 8xxx/9xxx.
+# Later entries override earlier on the same boost_id when lab_id differs.
+DEFAULT_REPORT_SOURCES = (
+    ("obs", 43327),
+    ("obs", 41693),
+    ("int", 53846),
+)
+
+
+def _normalize_id_cell(value) -> str:
+    """Normalize REDCap id cells to clean strings (avoid '8078.0' / 'nan')."""
+    if value is None or (isinstance(value, float) and pd.isna(value)):
+        return ""
+    try:
+        if pd.isna(value):
+            return ""
+    except (TypeError, ValueError):
+        pass
+    text = str(value).strip()
+    if not text or text.lower() in {"nan", "none"}:
+        return ""
+    # Combined dual-enrollment cells stay as-is (Save expands them later).
+    if "," in text or ";" in text:
+        return text
+    try:
+        return str(int(float(text)))
+    except ValueError:
+        return text
+
 
 class ID_COMPARISONS:
 
-    def __init__(self, rdss_dir, token, daysago=None) -> None:
+    def __init__(
+        self,
+        rdss_dir,
+        token,
+        daysago=None,
+        targeting_token=None,
+        report_sources=None,
+    ) -> None:
         self.token = token
+        self.targeting_token = (targeting_token or "").strip() or None
         self.rdss_dir = os.fspath(rdss_dir) if rdss_dir is not None else None
         if not self.rdss_dir:
             raise ValueError("RDSS directory is required to compare IDs.")
         self.daysago = daysago
+        self.report_sources = tuple(report_sources or DEFAULT_REPORT_SOURCES)
 
     def compare_ids(self):
         """
@@ -72,31 +111,127 @@ class ID_COMPARISONS:
 
         return {"matches": result, "duplicates": duplicates_dict}
 
+    def _token_for(self, project: str) -> str | None:
+        if project == "obs":
+            tok = (self.token or "").strip()
+            return tok or None
+        if project == "int":
+            return self.targeting_token
+        raise ValueError(f"Unknown report project key: {project}")
+
+    def _fetch_report_csv(self, project: str, report_id: int) -> pd.DataFrame | None:
+        """Fetch one REDCap report. Soft-fail (None) on missing token / API error."""
+        token = self._token_for(project)
+        label = f"{project}:{report_id}"
+        if not token:
+            logger.warning(
+                "Skipping REDCap report %s — no token configured for project=%s",
+                label,
+                project,
+            )
+            return None
+
+        url = "https://redcap.icts.uiowa.edu/redcap/api/"
+        data = {
+            "token": token,
+            "content": "report",
+            "report_id": report_id,
+            "format": "csv",
+        }
+        try:
+            r = requests.post(url, data=data, timeout=180)
+        except requests.RequestException as exc:
+            logger.error("REDCap request failed for %s: %s", label, exc)
+            return None
+
+        body = (r.text or "").strip()
+        if r.status_code != 200 or body.startswith("ERROR"):
+            logger.warning(
+                "REDCap report %s unavailable (status=%s): %s",
+                label,
+                r.status_code,
+                body[:200].replace("\n", " "),
+            )
+            return None
+
+        df = pd.read_csv(StringIO(r.text))
+        if "boost_id" not in df.columns or "lab_id" not in df.columns:
+            logger.warning(
+                "REDCap report %s missing boost_id/lab_id columns: %s",
+                label,
+                list(df.columns),
+            )
+            return None
+
+        slim = df[["boost_id", "lab_id"]].copy()
+        slim["boost_id"] = slim["boost_id"].map(_normalize_id_cell)
+        slim["lab_id"] = slim["lab_id"].map(_normalize_id_cell)
+        slim = slim[(slim["boost_id"] != "") & (slim["lab_id"] != "")]
+        slim["_source"] = label
+        logger.info(
+            "REDCap report %s loaded: %s rows with boost_id+lab_id",
+            label,
+            len(slim),
+        )
+        return slim.reset_index(drop=True)
+
+    @staticmethod
+    def _merge_report_frames(frames: list[pd.DataFrame]) -> pd.DataFrame:
+        """Concatenate reports; later sources win on boost_id lab conflicts."""
+        if not frames:
+            return pd.DataFrame(columns=["boost_id", "lab_id", "_source"])
+
+        merged: dict[str, tuple[str, str]] = {}
+        for frame in frames:
+            for _, row in frame.iterrows():
+                boost = _normalize_id_cell(row["boost_id"])
+                lab = _normalize_id_cell(row["lab_id"])
+                src = str(row.get("_source", ""))
+                if not boost or not lab:
+                    continue
+                if boost in merged and merged[boost][0] != lab:
+                    logger.warning(
+                        "boost_id %s lab conflict: %s (%s) overridden by %s (%s)",
+                        boost,
+                        merged[boost][0],
+                        merged[boost][1],
+                        lab,
+                        src,
+                    )
+                merged[boost] = (lab, src)
+
+        rows = [
+            {"boost_id": boost, "lab_id": lab, "_source": src}
+            for boost, (lab, src) in merged.items()
+        ]
+        return pd.DataFrame(rows)
+
     def _return_report(self):
         """
-        pulls the id report from the rdss via redcap api.
-        reads the report as a dataframe.
-        checks for boost_ids that are associated with multiple lab_ids, logs a critical error,
-        and removes these rows from the dataframe.
-        separates duplicate rows (based on any column) from the cleaned data.
+        Pull boost_id↔lab_id maps from configured REDCap reports (OBS + Targeting),
+        merge them, then apply the existing duplicate / dual-enrollment filters.
 
         returns:
             df_cleaned: dataframe with duplicates removed and problematic boost_ids excluded
             duplicate_rows: dataframe of duplicate rows
         """
-        url = "https://redcap.icts.uiowa.edu/redcap/api/"
-        data = {
-            "token": self.token,
-            "content": "report",
-            "report_id": 43327,
-            "format": "csv",
-        }
-        r = requests.post(url, data=data)
-        if r.status_code != 200:
-            print(f"error! status code is {r.status_code}")
+        frames: list[pd.DataFrame] = []
+        for project, report_id in self.report_sources:
+            frame = self._fetch_report_csv(project, int(report_id))
+            if frame is not None and not frame.empty:
+                frames.append(frame)
+
+        df = self._merge_report_frames(frames)
+        if df.empty:
+            print(
+                "error! no usable REDCap boost_id/lab_id rows from any configured report "
+                f"({', '.join(f'{p}:{r}' for p, r in self.report_sources)})"
+            )
             sys.exit(1)
 
-        df = pd.read_csv(StringIO(r.text))
+        # Drop helper column before downstream logic that expects lab_id/boost_id only.
+        if "_source" in df.columns:
+            df = df.drop(columns=["_source"])
 
         # identify boost_ids associated with multiple lab_ids.
         boost_id_counts = df.groupby("boost_id")["lab_id"].nunique()

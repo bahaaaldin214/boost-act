@@ -22,6 +22,7 @@ class Save:
         daysago=None,
         symlink=True,
         manifest_path="res/data.json",
+        targeting_token=None,
     ):
         if not rdssdir:
             raise ValueError(
@@ -29,7 +30,10 @@ class Save:
             )
 
         results = ID_COMPARISONS(
-            rdss_dir=rdssdir, token=token, daysago=daysago
+            rdss_dir=rdssdir,
+            token=token,
+            daysago=daysago,
+            targeting_token=targeting_token,
         ).compare_ids()
         self.matches = results["matches"]
         self.matches.pop("6022, 7143", None)
@@ -40,6 +44,7 @@ class Save:
         self.OBS_DIR = obsdir
         self.RDSS_DIR = rdssdir
         self.token = token
+        self.targeting_token = targeting_token
         self.daysago = daysago
         self.symlink = symlink
         self.manifest_path = manifest_path
@@ -280,6 +285,7 @@ class Save:
             rdss_dir=rdss_dir,
             token=token,
             daysago=daysago,
+            targeting_token=getattr(self, "targeting_token", None),
         )._return_report()
         return report_df
 

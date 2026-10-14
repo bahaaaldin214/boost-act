@@ -56,10 +56,12 @@ class Pipe:
         system="vosslnx",
         rebuild_manifest_only=False,
         reconcile_manifest_only=False,
+        targeting_token=None,
     ):
         # ensure class attrs are set for everyone (Pipe.INT_DIR etc.)
         type(self).configure(system)
         self.token = token
+        self.targeting_token = targeting_token
         self.daysago = daysago
         self.system = system
         self.rebuild_manifest_only = rebuild_manifest_only
@@ -73,6 +75,7 @@ class Pipe:
             token=self.token,
             daysago=self.daysago,
             symlink=False,
+            targeting_token=self.targeting_token,
         )
 
         try:
